@@ -42,6 +42,7 @@
     "firebase": "^11.8.1",
     "genkit": "1.8.0",
     "lucide-react": "^0.475.0",
+    "mongoose": "^8.5.1",
     "next": "15.2.3",
     "next-themes": "^0.3.0",
     "patch-package": "^8.0.0",
