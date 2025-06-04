@@ -1,4 +1,4 @@
-import type { Objective, TaskStatus } from "@/types";
+import type { Objective, Task, TaskStatus } from "@/types";
 import { KanbanBoard } from "./KanbanBoard";
 
 interface ObjectiveDashboardProps {
@@ -6,9 +6,11 @@ interface ObjectiveDashboardProps {
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus, oldStatus: TaskStatus, objectiveId: string) => void;
   onTaskDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string, sourceStatus: TaskStatus) => void;
   draggingTaskId: string | null;
+  onEditObjective: (objective: Objective) => void;
+  onEditTask: (task: Task, objectiveId: string) => void;
 }
 
-export const ObjectiveDashboard = ({ objectives, onTaskStatusChange, onTaskDragStart, draggingTaskId }: ObjectiveDashboardProps) => {
+export const ObjectiveDashboard = ({ objectives, onTaskStatusChange, onTaskDragStart, draggingTaskId, onEditObjective, onEditTask }: ObjectiveDashboardProps) => {
   if (objectives.length === 0) {
     return <p className="text-center text-muted-foreground py-10">No objectives created yet. Click "Add Objective" to get started.</p>;
   }
@@ -22,6 +24,8 @@ export const ObjectiveDashboard = ({ objectives, onTaskStatusChange, onTaskDragS
           onTaskStatusChange={onTaskStatusChange}
           onTaskDragStart={onTaskDragStart}
           draggingTaskId={draggingTaskId}
+          onEditObjective={onEditObjective}
+          onEditTask={onEditTask}
         />
       ))}
     </div>

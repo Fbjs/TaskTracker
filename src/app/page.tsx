@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -7,64 +8,109 @@ import { SummaryMetrics } from "@/components/SummaryMetrics";
 import { ObjectiveDashboard } from "@/components/ObjectiveDashboard";
 import { GanttChartView } from "@/components/GanttChartView";
 import { ObjectiveDialog } from "@/components/ObjectiveDialog";
+import { TaskDialog } from "@/components/TaskDialog"; // New import
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LayoutGrid, BarChartHorizontalBig, Loader2 } from "lucide-react";
-import { getInitialData, updateTaskStatusAction, addObjectiveAction } from "@/app/actions";
+import { getInitialData, updateTaskStatusAction, updateObjectiveAction, updateTaskAction } from "@/app/actions"; // Removed addObjectiveAction, handled by ObjectiveDialog logic
 import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
   const [isObjectiveDialogOpen, setIsObjectiveDialogOpen] = useState(false);
+  const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
+
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false); // New state for TaskDialog
+  const [editingTask, setEditingTask] = useState<Task | null>(null); // New state for TaskDialog
+  const [currentObjectiveIdForTask, setCurrentObjectiveIdForTask] = useState<string | null>(null); // For TaskDialog context
+
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const processRawObjective = useCallback((rawObj: Objective): Objective => {
+    return {
+      ...rawObj,
+      tasks: rawObj.tasks.map(task => ({
+        ...task,
+        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+        createdAt: new Date(task.createdAt),
+      })),
+    };
+  }, []);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getInitialData();
-      // Ensure dates are Date objects
-      const processedObjectives = data.objectives.map(obj => ({
-        ...obj,
-        tasks: obj.tasks.map(task => ({
-          ...task,
-          dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-          createdAt: new Date(task.createdAt),
-        })),
-      }));
-      setObjectives(processedObjectives);
+      setObjectives(data.objectives.map(processRawObjective));
     } catch (error) {
       toast({ title: "Error", description: "Failed to load data.", variant: "destructive" });
       console.error("Failed to load data", error);
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, processRawObjective]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const handleAddObjective = () => {
+  const handleAddObjectiveClick = () => {
+    setEditingObjective(null); // Ensure not in edit mode
     setIsObjectiveDialogOpen(true);
   };
 
-  const handleObjectiveAdded = (newObjectiveData: Objective) => {
-     // Process dates for the new objective
-    const processedNewObjective = {
-      ...newObjectiveData,
-      tasks: newObjectiveData.tasks.map(task => ({
-        ...task,
-        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-        createdAt: new Date(task.createdAt),
-      })),
-    };
-    setObjectives(prev => [...prev, processedNewObjective]);
-    setIsObjectiveDialogOpen(false); // Close dialog after adding
+  const handleEditObjectiveClick = (objective: Objective) => {
+    setEditingObjective(objective);
+    setIsObjectiveDialogOpen(true);
   };
+  
+  const handleObjectiveSaved = (savedObjective: Objective) => {
+    const processedSavedObjective = processRawObjective(savedObjective);
+    if (editingObjective) { // It was an update
+      setObjectives(prev => prev.map(obj => obj.id === processedSavedObjective.id ? processedSavedObjective : obj));
+    } else { // It was an add
+      setObjectives(prev => [...prev, processedSavedObjective]);
+    }
+    setIsObjectiveDialogOpen(false);
+    setEditingObjective(null);
+  };
+
+  const handleEditTaskClick = (task: Task, objectiveId: string) => {
+    setEditingTask(task);
+    setCurrentObjectiveIdForTask(objectiveId);
+    setIsTaskDialogOpen(true);
+  };
+
+  const handleTaskSaved = (savedTask: Task) => {
+    const processedSavedTask = {
+      ...savedTask,
+      dueDate: savedTask.dueDate ? new Date(savedTask.dueDate) : undefined,
+      createdAt: new Date(savedTask.createdAt),
+    };
+
+    setObjectives(prevObjectives =>
+      prevObjectives.map(obj => {
+        if (obj.id === processedSavedTask.objectiveId) {
+          return {
+            ...obj,
+            tasks: obj.tasks.map(t => t.id === processedSavedTask.id ? processedSavedTask : t),
+          };
+        }
+        return obj;
+      })
+    );
+    setIsTaskDialogOpen(false);
+    setEditingTask(null);
+    setCurrentObjectiveIdForTask(null);
+  };
+
 
   const handleTaskStatusChange = async (taskId: string, newStatus: TaskStatus, oldStatus: TaskStatus, objectiveId: string) => {
     if (newStatus === oldStatus) return;
+
+    const originalObjectives = objectives.map(obj => ({...obj, tasks: [...obj.tasks]})); // Deep copy for revert
 
     setObjectives(prevObjectives =>
       prevObjectives.map(obj =>
@@ -82,37 +128,13 @@ export default function Home() {
     try {
       const result = await updateTaskStatusAction(taskId, newStatus, objectiveId);
       if (!result.success) {
-        // Revert UI change if server update fails
-        setObjectives(prevObjectives =>
-          prevObjectives.map(obj =>
-            obj.id === objectiveId
-              ? {
-                  ...obj,
-                  tasks: obj.tasks.map(task =>
-                    task.id === taskId ? { ...task, status: oldStatus } : task
-                  ),
-                }
-              : obj
-          )
-        );
+        setObjectives(originalObjectives.map(processRawObjective)); // Revert UI
         toast({ title: "Update Failed", description: "Could not update task status.", variant: "destructive" });
       } else {
         toast({ title: "Task Updated", description: `Task moved to ${newStatus}.` });
       }
     } catch (error) {
-      // Revert UI change on error
-      setObjectives(prevObjectives =>
-        prevObjectives.map(obj =>
-          obj.id === objectiveId
-            ? {
-                ...obj,
-                tasks: obj.tasks.map(task =>
-                  task.id === taskId ? { ...task, status: oldStatus } : task
-                ),
-              }
-            : obj
-        )
-      );
+      setObjectives(originalObjectives.map(processRawObjective)); // Revert UI
       toast({ title: "Error", description: "An error occurred while updating task status.", variant: "destructive" });
     }
   };
@@ -121,8 +143,6 @@ export default function Home() {
     e.dataTransfer.setData("taskId", taskId);
     e.dataTransfer.setData("sourceStatus", sourceStatus);
     setDraggingTaskId(taskId);
-    // Add a subtle drag image if desired
-    // e.dataTransfer.setDragImage(e.currentTarget, 0, 0); 
   };
   
   const handleTaskDragEnd = () => {
@@ -133,7 +153,7 @@ export default function Home() {
   if (isLoading) {
     return (
       <div className="flex flex-col min-h-screen">
-        <AppHeader onAddObjective={handleAddObjective} />
+        <AppHeader onAddObjective={handleAddObjectiveClick} />
         <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-accent" />
         </main>
@@ -143,7 +163,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background" onDragEnd={handleTaskDragEnd}>
-      <AppHeader onAddObjective={handleAddObjective} />
+      <AppHeader onAddObjective={handleAddObjectiveClick} />
       <main className="flex-grow container mx-auto px-4 py-8">
         <SummaryMetrics objectives={objectives} />
         <Tabs defaultValue="dashboard" className="w-full">
@@ -161,6 +181,8 @@ export default function Home() {
               onTaskStatusChange={handleTaskStatusChange}
               onTaskDragStart={handleTaskDragStart}
               draggingTaskId={draggingTaskId}
+              onEditObjective={handleEditObjectiveClick}
+              onEditTask={handleEditTaskClick}
             />
           </TabsContent>
           <TabsContent value="gantt">
@@ -171,8 +193,18 @@ export default function Home() {
       <ObjectiveDialog 
         isOpen={isObjectiveDialogOpen} 
         onOpenChange={setIsObjectiveDialogOpen}
-        onObjectiveAdded={handleObjectiveAdded}
+        onObjectiveSaved={handleObjectiveSaved}
+        objectiveToEdit={editingObjective}
       />
+      {editingTask && currentObjectiveIdForTask && ( // Conditionally render TaskDialog
+        <TaskDialog
+          isOpen={isTaskDialogOpen}
+          onOpenChange={setIsTaskDialogOpen}
+          task={editingTask}
+          objectiveId={currentObjectiveIdForTask}
+          onTaskSaved={handleTaskSaved}
+        />
+      )}
     </div>
   );
 }

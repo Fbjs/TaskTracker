@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
-import type { AISuggestions, SuggestedTask } from "@/types";
+import type { Objective, AISuggestions, SuggestedTask } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,12 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sparkles, PlusCircle, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { handleSuggestTasks, addObjectiveAction } from "@/app/actions";
+import { handleSuggestTasks, addObjectiveAction, updateObjectiveAction } from "@/app/actions";
 
 interface ObjectiveDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onObjectiveAdded: (newObjective: any) => void; // Adjust type as needed
+  onObjectiveSaved: (objective: Objective) => void;
+  objectiveToEdit?: Objective | null;
 }
 
 interface NewTask {
@@ -30,7 +32,7 @@ interface NewTask {
   assignee?: string;
 }
 
-export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveAdded }: ObjectiveDialogProps) => {
+export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveSaved, objectiveToEdit }: ObjectiveDialogProps) => {
   const [objectiveDescription, setObjectiveDescription] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
   const [tasks, setTasks] = useState<NewTask[]>([{ description: "", assignee: "" }]);
@@ -38,16 +40,23 @@ export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveAdded }: Obje
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
+  const isEditMode = !!objectiveToEdit;
+
   useEffect(() => {
     if (isOpen) {
-      // Reset form when dialog opens
-      setObjectiveDescription("");
-      setAiPrompt("");
-      setTasks([{ description: "", assignee: "" }]);
+      if (isEditMode && objectiveToEdit) {
+        setObjectiveDescription(objectiveToEdit.description);
+        setAiPrompt(""); // Not used in edit mode for description
+        setTasks([]); // Not used in edit mode for description
+      } else {
+        setObjectiveDescription("");
+        setAiPrompt("");
+        setTasks([{ description: "", assignee: "" }]);
+      }
       setIsAiLoading(false);
       setIsSubmitting(false);
     }
-  }, [isOpen]);
+  }, [isOpen, isEditMode, objectiveToEdit]);
 
   const handleGetAiSuggestions = async () => {
     if (!aiPrompt.trim()) {
@@ -88,19 +97,36 @@ export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveAdded }: Obje
       toast({ title: "Validation Error", description: "Objective description cannot be empty.", variant: "destructive" });
       return;
     }
-    if (tasks.some(task => !task.description.trim())) {
-      toast({ title: "Validation Error", description: "All task descriptions must be filled.", variant: "destructive" });
-      return;
+    if (!isEditMode && tasks.some(task => !task.description.trim()) && tasks.length > 0) {
+       if (tasks.length === 1 && tasks[0].description.trim() === "" && tasks[0].assignee?.trim() === "") {
+        // Allow submitting with no tasks if the single default empty task is untouched
+      } else if (tasks.some(task => !task.description.trim())) {
+        toast({ title: "Validation Error", description: "All task descriptions must be filled.", variant: "destructive" });
+        return;
+      }
     }
+
 
     setIsSubmitting(true);
     try {
-      const newObjective = await addObjectiveAction(objectiveDescription, tasks.filter(t => t.description.trim()));
-      onObjectiveAdded(newObjective);
-      toast({ title: "Objective Added", description: `"${newObjective.description}" has been successfully created.` });
-      onOpenChange(false);
+      if (isEditMode && objectiveToEdit) {
+        const result = await updateObjectiveAction(objectiveToEdit.id, objectiveDescription);
+        if ("error" in result) {
+          toast({ title: "Error", description: result.error, variant: "destructive" });
+        } else {
+          onObjectiveSaved(result);
+          toast({ title: "Objective Updated", description: `"${result.description}" has been successfully updated.` });
+          onOpenChange(false);
+        }
+      } else {
+        const tasksToSubmit = tasks.filter(t => t.description.trim() !== "");
+        const newObjective = await addObjectiveAction(objectiveDescription, tasksToSubmit);
+        onObjectiveSaved(newObjective);
+        toast({ title: "Objective Added", description: `"${newObjective.description}" has been successfully created.` });
+        onOpenChange(false);
+      }
     } catch (error) {
-      toast({ title: "Error", description: "Failed to add objective.", variant: "destructive" });
+      toast({ title: "Error", description: `Failed to ${isEditMode ? 'update' : 'add'} objective.`, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -110,27 +136,31 @@ export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveAdded }: Obje
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="font-headline">Add New Objective</DialogTitle>
-          <DialogDescription>
-            Define your objective and its tasks. Use AI to help generate ideas.
-          </DialogDescription>
+          <DialogTitle className="font-headline">{isEditMode ? "Edit Objective" : "Add New Objective"}</DialogTitle>
+          {!isEditMode && (
+            <DialogDescription>
+              Define your objective and its tasks. Use AI to help generate ideas.
+            </DialogDescription>
+          )}
         </DialogHeader>
         <ScrollArea className="flex-grow pr-6 -mr-6">
-          <form onSubmit={handleSubmit} className="space-y-6 py-4">
-            <div>
-              <Label htmlFor="ai-prompt" className="font-semibold">AI Objective Prompt (Optional)</Label>
-              <Textarea
-                id="ai-prompt"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="e.g., Increase Q3 sales by 15% through targeted digital marketing"
-                className="mt-1"
-              />
-              <Button type="button" onClick={handleGetAiSuggestions} disabled={isAiLoading} size="sm" className="mt-2">
-                {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Get AI Suggestions
-              </Button>
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-6 py-4" id="objective-dialog-form">
+            {!isEditMode && (
+              <div>
+                <Label htmlFor="ai-prompt" className="font-semibold">AI Objective Prompt (Optional)</Label>
+                <Textarea
+                  id="ai-prompt"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="e.g., Increase Q3 sales by 15% through targeted digital marketing"
+                  className="mt-1"
+                />
+                <Button type="button" onClick={handleGetAiSuggestions} disabled={isAiLoading} size="sm" className="mt-2">
+                  {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                  Get AI Suggestions
+                </Button>
+              </div>
+            )}
 
             <div>
               <Label htmlFor="objective-description" className="font-semibold">Objective Description</Label>
@@ -144,54 +174,47 @@ export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveAdded }: Obje
               />
             </div>
 
-            <div>
-              <Label className="font-semibold">Tasks</Label>
-              {tasks.map((task, index) => (
-                <div key={index} className="mt-2 p-3 border rounded-md space-y-2 bg-muted/30">
-                  <div className="flex items-center gap-2">
+            {!isEditMode && (
+              <div>
+                <Label className="font-semibold">Tasks</Label>
+                {tasks.map((task, index) => (
+                  <div key={index} className="mt-2 p-3 border rounded-md space-y-2 bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={task.description}
+                        onChange={(e) => handleTaskChange(index, "description", e.target.value)}
+                        placeholder={`Task ${index + 1} description`}
+                        required={!isEditMode}
+                        className="flex-grow"
+                      />
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(index)} disabled={tasks.length === 1 && !isEditMode}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                     <Input
-                      value={task.description}
-                      onChange={(e) => handleTaskChange(index, "description", e.target.value)}
-                      placeholder={`Task ${index + 1} description`}
-                      required
-                      className="flex-grow"
+                      value={task.assignee || ""}
+                      onChange={(e) => handleTaskChange(index, "assignee", e.target.value)}
+                      placeholder="Assignee (optional)"
                     />
-                     <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(index)} disabled={tasks.length === 1}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
                   </div>
-                  <Input
-                    value={task.assignee || ""}
-                    onChange={(e) => handleTaskChange(index, "assignee", e.target.value)}
-                    placeholder="Assignee (optional)"
-                  />
-                </div>
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={handleAddTask} className="mt-2">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add Task
-              </Button>
-            </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={handleAddTask} className="mt-2">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Task
+                </Button>
+              </div>
+            )}
           </form>
         </ScrollArea>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" form="objective-dialog-form" onClick={handleSubmit} disabled={isSubmitting}>
+          <Button type="submit" form="objective-dialog-form" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save Objective
+            {isEditMode ? "Save Changes" : "Save Objective"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
-
-// Add a hidden form with id="objective-dialog-form" to make the submit button work from footer
-// This is a workaround for Dialog + Form. A better way might be to use react-hook-form.
-// For now, this is a simplified approach.
-// The form is inside ScrollArea, the submit button is in DialogFooter.
-// The form's actual onSubmit is handled by the Button's onClick, which calls handleSubmit.
-// The form tag here is just to link via `form` attribute.
-// A simpler way is to make the submit button call the submit handler directly,
-// which is what is implemented above. The <form> tag can wrap the content within ScrollArea.

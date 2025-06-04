@@ -1,13 +1,15 @@
 import type { Task, TaskPriority, TaskStatus } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, User, GripVertical, AlertTriangle, CheckCircle, CircleDot, Circle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CalendarDays, User, GripVertical, AlertTriangle, CheckCircle, CircleDot, Circle, Pencil } from "lucide-react";
 import { format } from "date-fns";
 
 interface TaskCardProps {
   task: Task;
   isDragging?: boolean;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string, sourceStatus: TaskStatus) => void;
+  onEditTask: (task: Task) => void;
 }
 
 const priorityColors: Record<TaskPriority, string> = {
@@ -23,7 +25,7 @@ const statusIcons: Record<TaskStatus, React.ReactNode> = {
   "Done": <CheckCircle className="h-4 w-4 text-green-500" />,
 };
 
-export const TaskCard = ({ task, isDragging, onDragStart }: TaskCardProps) => {
+export const TaskCard = ({ task, isDragging, onDragStart, onEditTask }: TaskCardProps) => {
   return (
     <Card
       draggable
@@ -32,8 +34,13 @@ export const TaskCard = ({ task, isDragging, onDragStart }: TaskCardProps) => {
     >
       <CardHeader className="p-3">
         <div className="flex items-start justify-between">
-          <CardTitle className="text-base font-medium font-body leading-tight break-words w-[calc(100%-1.5rem)]">{task.description}</CardTitle>
-          <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 cursor-grab" />
+          <CardTitle className="text-base font-medium font-body leading-tight break-words w-[calc(100%-3rem)]">{task.description}</CardTitle>
+          <div className="flex flex-col items-end gap-1">
+            <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 cursor-grab" />
+            <Button variant="ghost" size="icon" className="h-6 w-6 mt-1" onClick={() => onEditTask(task)} aria-label="Edit task">
+              <Pencil className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-3 pt-0 text-sm">

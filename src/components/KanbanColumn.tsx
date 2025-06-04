@@ -8,9 +8,10 @@ interface KanbanColumnProps {
   onTaskDrop: (taskId: string, targetStatus: TaskStatus, sourceStatus: TaskStatus) => void;
   onTaskDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string, sourceStatus: TaskStatus) => void;
   draggingTaskId: string | null;
+  onEditTask: (task: Task) => void;
 }
 
-export const KanbanColumn = ({ status, tasks, onTaskDrop, onTaskDragStart, draggingTaskId }: KanbanColumnProps) => {
+export const KanbanColumn = ({ status, tasks, onTaskDrop, onTaskDragStart, draggingTaskId, onEditTask }: KanbanColumnProps) => {
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
   };
@@ -43,6 +44,7 @@ export const KanbanColumn = ({ status, tasks, onTaskDrop, onTaskDragStart, dragg
               task={task} 
               onDragStart={onTaskDragStart}
               isDragging={draggingTaskId === task.id}
+              onEditTask={onEditTask}
             />
           ))
         )}
