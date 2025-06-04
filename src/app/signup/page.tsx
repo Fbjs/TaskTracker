@@ -11,16 +11,18 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { LogoIcon } from "@/components/icons/LogoIcon";
+import { Loader2 } from "lucide-react";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const { signup } = useAuth();
+  const { signup, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !confirmPassword) {
       toast({ title: "Error", description: "Please fill in all fields.", variant: "destructive" });
@@ -30,11 +32,21 @@ export default function SignupPage() {
       toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" });
       return;
     }
-    // Simulate signup
-    const newUser = { id: `user-${Date.now()}`, email };
-    signup(newUser);
-    toast({ title: "Account Created", description: `Welcome, ${email}! You are now logged in.` });
-    router.push("/");
+    if (password.length < 6) {
+      toast({ title: "Error", description: "Password must be at least 6 characters long.", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmitting(true);
+    const result = await signup(email, password);
+    setIsSubmitting(false);
+
+    if ("error" in result) {
+      toast({ title: "Signup Failed", description: result.error, variant: "destructive" });
+    } else {
+      toast({ title: "Account Created", description: `Welcome, ${result.email}! You are now logged in.` });
+      router.push("/");
+    }
   };
 
   return (
@@ -59,6 +71,7 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isSubmitting || authLoading}
               />
             </div>
             <div className="space-y-2">
@@ -69,6 +82,7 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={isSubmitting || authLoading}
               />
             </div>
             <div className="space-y-2">
@@ -79,10 +93,11 @@ export default function SignupPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                disabled={isSubmitting || authLoading}
               />
             </div>
-            <Button type="submit" className="w-full">
-              Sign Up
+            <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
+              {isSubmitting || authLoading ? <Loader2 className="animate-spin" /> : "Sign Up"}
             </Button>
           </form>
         </CardContent>
