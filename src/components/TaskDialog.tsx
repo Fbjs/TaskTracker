@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { Task, TaskStatus, TaskPriority, ALL_TASK_STATUSES, ALL_TASK_PRIORITIES } from "@/types";
+import type { Task, TaskStatus, TaskPriority } from "@/types"; // Removed unused ALL_TASK_STATUSES, ALL_TASK_PRIORITIES from here as they are values
+import { ALL_TASK_STATUSES, ALL_TASK_PRIORITIES } from "@/types"; // Import them as values
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon, Loader2 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns"; // Removed unused parseISO
 import { useToast } from "@/hooks/use-toast";
 import { updateTaskAction } from "@/app/actions";
 
