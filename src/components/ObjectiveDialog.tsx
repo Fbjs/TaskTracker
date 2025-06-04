@@ -25,6 +25,8 @@ interface ObjectiveDialogProps {
   onOpenChange: (open: boolean) => void;
   onObjectiveSaved: (objective: Objective) => void;
   objectiveToEdit?: Objective | null;
+  currentWorkspaceId?: string; // Added
+  currentUserId?: string; // Added
 }
 
 interface NewTask {
@@ -32,7 +34,14 @@ interface NewTask {
   assignee?: string;
 }
 
-export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveSaved, objectiveToEdit }: ObjectiveDialogProps) => {
+export const ObjectiveDialog = ({ 
+  isOpen, 
+  onOpenChange, 
+  onObjectiveSaved, 
+  objectiveToEdit,
+  currentWorkspaceId,
+  currentUserId 
+}: ObjectiveDialogProps) => {
   const [objectiveDescription, setObjectiveDescription] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
   const [tasks, setTasks] = useState<NewTask[]>([{ description: "", assignee: "" }]);
@@ -46,8 +55,8 @@ export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveSaved, object
     if (isOpen) {
       if (isEditMode && objectiveToEdit) {
         setObjectiveDescription(objectiveToEdit.description);
-        setAiPrompt(""); // Not used in edit mode for description
-        setTasks([]); // Not used in edit mode for description
+        setAiPrompt(""); 
+        setTasks([]); 
       } else {
         setObjectiveDescription("");
         setAiPrompt("");
@@ -106,6 +115,11 @@ export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveSaved, object
       }
     }
 
+    if (!isEditMode && (!currentWorkspaceId || !currentUserId)) {
+      toast({ title: "Error", description: "User or Workspace context is missing.", variant: "destructive" });
+      return;
+    }
+
 
     setIsSubmitting(true);
     try {
@@ -120,7 +134,12 @@ export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveSaved, object
         }
       } else {
         const tasksToSubmit = tasks.filter(t => t.description.trim() !== "");
-        const newObjective = await addObjectiveAction(objectiveDescription, tasksToSubmit);
+        const newObjective = await addObjectiveAction(
+          objectiveDescription, 
+          tasksToSubmit,
+          currentUserId, // Pass userId
+          currentWorkspaceId // Pass workspaceId
+        );
         onObjectiveSaved(newObjective);
         toast({ title: "Objective Added", description: `"${newObjective.description}" has been successfully created.` });
         onOpenChange(false);
@@ -184,10 +203,9 @@ export const ObjectiveDialog = ({ isOpen, onOpenChange, onObjectiveSaved, object
                         value={task.description}
                         onChange={(e) => handleTaskChange(index, "description", e.target.value)}
                         placeholder={`Task ${index + 1} description`}
-                        required={!isEditMode}
                         className="flex-grow"
                       />
-                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(index)} disabled={tasks.length === 1 && !isEditMode}>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(index)} disabled={tasks.length === 1 && !isEditMode && !task.description && !task.assignee}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>

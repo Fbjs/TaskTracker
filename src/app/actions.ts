@@ -1,12 +1,17 @@
-// src/app/actions.ts
+
 "use server";
 
 import { suggestTasks as genkitSuggestTasks, type SuggestTasksInput, type SuggestTasksOutput } from "@/ai/flows/suggest-tasks";
-import type { Objective, Task, TaskStatus, TaskPriority, AISuggestions, ALL_TASK_PRIORITIES, ALL_TASK_STATUSES } from "@/types";
+import type { Objective, Task, TaskStatus, User, Workspace, AISuggestions } from "@/types";
 import { revalidatePath } from "next/cache";
 
-// Dummy data store (in a real app, this would be a database)
+// Dummy data stores (in a real app, this would be a database)
+let usersStore: User[] = [];
+let workspacesStore: Workspace[] = [];
 let objectivesStore: Objective[] = [];
+
+let nextUserId = 1;
+let nextWorkspaceId = 1;
 let nextObjectiveId = 1;
 let nextTaskId = 1;
 
@@ -22,33 +27,54 @@ function processObjective(obj: Objective): Objective {
   };
 }
 
-
-export async function getInitialData(): Promise<{ objectives: Objective[] }> {
-  if (objectivesStore.length === 0) {
-    const mockObjectives: Objective[] = [
-      {
-        id: `obj-${nextObjectiveId++}`,
-        description: "Launch New Marketing Campaign",
-        tasks: [
-          { id: `task-${nextTaskId++}`, objectiveId: `obj-1`, description: "Define campaign goals and KPIs", status: "Done", priority: "High", dueDate: new Date("2024-08-10"), createdAt: new Date("2024-07-01"), assignee: "Alice" },
-          { id: `task-${nextTaskId++}`, objectiveId: `obj-1`, description: "Develop creative assets", status: "In Progress", priority: "High", dueDate: new Date("2024-08-20"), createdAt: new Date("2024-07-10"), assignee: "Bob" },
-          { id: `task-${nextTaskId++}`, objectiveId: `obj-1`, description: "Plan media buy", status: "To Do", priority: "Medium", dueDate: new Date("2024-08-25"), createdAt: new Date("2024-07-15"), assignee: "Charlie" },
-        ],
-      },
-      {
-        id: `obj-${nextObjectiveId++}`,
-        description: "Develop Q4 Product Roadmap",
-        tasks: [
-          { id: `task-${nextTaskId++}`, objectiveId: `obj-2`, description: "Gather stakeholder feedback", status: "In Progress", priority: "High", createdAt: new Date("2024-07-05"), assignee: "Diana" },
-          { id: `task-${nextTaskId++}`, objectiveId: `obj-2`, description: "Analyze market trends", status: "To Do", priority: "Medium", dueDate: new Date("2024-09-15"), createdAt: new Date("2024-07-20"), assignee: "Eve" },
-          { id: `task-${nextTaskId++}`, objectiveId: `obj-2`, description: "Draft initial roadmap", status: "Blocked", priority: "High", dueDate: new Date("2024-09-30"), createdAt: new Date("2024-07-25"), assignee: "Frank" },
-        ],
-      },
-    ];
-    objectivesStore = mockObjectives.map(processObjective);
+// Mock function to get or create a user (replace with real auth in production)
+async function getOrCreateUser(email: string): Promise<User> {
+  let user = usersStore.find(u => u.email === email);
+  if (!user) {
+    user = { id: `user-${nextUserId++}`, email };
+    usersStore.push(user);
   }
-  return { objectives: JSON.parse(JSON.stringify(objectivesStore.map(processObjective))) };
+  return user;
 }
+
+export async function getInitialData(userId?: string): Promise<{ objectives: Objective[]; workspaces: Workspace[] }> {
+  // In a real app, filter by userId and workspace memberships
+  // For now, return all objectives and workspaces "owned" by the user or all if no userId.
+  // This is highly simplified.
+  
+  if (workspacesStore.length === 0 && userId) {
+    // Create a default workspace for a new user
+     const defaultWorkspace: Workspace = {
+      id: `ws-${nextWorkspaceId++}`,
+      name: "My First Workspace",
+      ownerId: userId,
+    };
+    workspacesStore.push(defaultWorkspace);
+  }
+
+  const userWorkspaces = userId ? workspacesStore.filter(ws => ws.ownerId === userId) : [...workspacesStore];
+  // For this mock, objectives are not strictly filtered by workspace on initial load,
+  // the client side will do that.
+  return { 
+    objectives: JSON.parse(JSON.stringify(objectivesStore.map(processObjective))),
+    workspaces: JSON.parse(JSON.stringify(userWorkspaces))
+  };
+}
+
+export async function createWorkspaceAction(name: string, ownerId: string): Promise<Workspace | { error: string }> {
+  if (!name.trim()) {
+    return { error: "Workspace name cannot be empty." };
+  }
+  const newWorkspace: Workspace = {
+    id: `ws-${nextWorkspaceId++}`,
+    name,
+    ownerId,
+  };
+  workspacesStore.push(newWorkspace);
+  revalidatePath("/");
+  return JSON.parse(JSON.stringify(newWorkspace));
+}
+
 
 export async function handleSuggestTasks(objectivePrompt: string): Promise<AISuggestions | { error: string }> {
   try {
@@ -61,14 +87,19 @@ export async function handleSuggestTasks(objectivePrompt: string): Promise<AISug
   }
 }
 
-export async function addObjectiveAction(description: string, tasksData: { description: string; assignee?: string }[]): Promise<Objective> {
+export async function addObjectiveAction(
+  description: string, 
+  tasksData: { description: string; assignee?: string }[],
+  userId?: string, // Added userId
+  workspaceId?: string // Added workspaceId
+): Promise<Objective> {
   const newObjectiveId = `obj-${nextObjectiveId++}`;
   const newTasks: Task[] = tasksData.map(taskData => ({
     id: `task-${nextTaskId++}`,
     objectiveId: newObjectiveId,
     description: taskData.description,
     status: "To Do",
-    priority: "Medium", // Default priority
+    priority: "Medium",
     createdAt: new Date(),
     assignee: taskData.assignee || undefined,
   }));
@@ -77,6 +108,8 @@ export async function addObjectiveAction(description: string, tasksData: { descr
     id: newObjectiveId,
     description,
     tasks: newTasks,
+    userId,
+    workspaceId,
   };
   objectivesStore.push(newObjective);
   revalidatePath("/");
