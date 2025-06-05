@@ -321,7 +321,7 @@ export async function handleSuggestTasks(objectivePrompt: string): Promise<AISug
 
 export async function addObjectiveAction(
   description: string,
-  tasksData: { description: string; assigneeId?: string; startDate?: Date; dueDate?: Date }[], // Added startDate, dueDate
+  tasksData: { description: string; assigneeId?: string; startDate?: Date; dueDate?: Date }[],
   userId?: string,
   workspaceId?: string
 ): Promise<Objective | { error: string }> {
@@ -408,9 +408,9 @@ export async function addObjectiveAction(
 export async function updateObjectiveAction(
   objectiveId: string, 
   newDescription: string,
-  newTasksData: { description: string; assigneeId?: string; startDate?: Date; dueDate?: Date }[] = [], // Added startDate, dueDate
+  newTasksData: { description: string; assigneeId?: string; startDate?: Date; dueDate?: Date }[] = [],
   tasksToDeleteIds: string[] = [],
-  tasksToUpdateData: { id: string; description?: string; assigneeId?: string | null; startDate?: Date | null; dueDate?: Date | null }[] = [] // Added startDate, dueDate
+  tasksToUpdateData: { id: string; description?: string; assigneeId?: string | null; startDate?: Date | null; dueDate?: Date | null }[] = []
 ): Promise<Objective | { error: string }> {
   await dbConnect();
   if (!objectiveId) return { error: "Objective ID is required." };
@@ -540,57 +540,86 @@ export async function updateTaskAction(
   await dbConnect();
   if (!taskId) return { error: "Task ID is required." };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { objectiveId: _, assignee, ...rawUpdates } = updates; 
   
-  // Explicitly cast to 'any' to handle potentially undefined fields before they are set
-  const validUpdates: any = {...rawUpdates};
+  const updatesForSet: any = {};
 
-  if (validUpdates.startDate === null) { 
-    validUpdates.startDate = undefined; 
-  } else if (validUpdates.startDate) {
-    validUpdates.startDate = new Date(validUpdates.startDate);
+  // Process description, status, priority if present
+  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'description')) {
+    updatesForSet.description = rawUpdates.description;
+  }
+  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'status')) {
+    updatesForSet.status = rawUpdates.status;
+  }
+  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'priority')) {
+    updatesForSet.priority = rawUpdates.priority;
   }
 
-  if (validUpdates.dueDate === null) { 
-    validUpdates.dueDate = undefined; 
-  } else if (validUpdates.dueDate) {
-    validUpdates.dueDate = new Date(validUpdates.dueDate);
+  // Process startDate
+  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'startDate')) {
+    if (rawUpdates.startDate === null) {
+      updatesForSet.startDate = undefined; // Mongoose unsets the field
+    } else if (rawUpdates.startDate) {
+      updatesForSet.startDate = new Date(rawUpdates.startDate);
+    } else { // E.g. if rawUpdates.startDate is an empty string or explicit undefined
+      updatesForSet.startDate = undefined;
+    }
   }
 
-  if (validUpdates.assigneeId === null) {
-    validUpdates.assigneeId = undefined; 
-  } else if (typeof validUpdates.assigneeId === 'string' && validUpdates.assigneeId.trim() !== "") {
-     const taskDocForWorkspaceCheck = await TaskCollection.findById(taskId).populate({
+  // Process dueDate
+  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'dueDate')) {
+    if (rawUpdates.dueDate === null) {
+      updatesForSet.dueDate = undefined;
+    } else if (rawUpdates.dueDate) {
+      updatesForSet.dueDate = new Date(rawUpdates.dueDate);
+    } else {
+      updatesForSet.dueDate = undefined;
+    }
+  }
+  
+  // Process assigneeId
+  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'assigneeId')) {
+    if (rawUpdates.assigneeId === null || rawUpdates.assigneeId === undefined || rawUpdates.assigneeId.trim() === "") {
+      updatesForSet.assigneeId = undefined; // Unset assignee
+    } else {
+      // Validate assignee is member of workspace
+      const taskDocForWorkspaceCheck = await TaskCollection.findById(taskId).populate({
         path: 'objectiveId',
         select: 'workspaceId',
         populate: {
             path: 'workspaceId',
             select: 'memberIds'
         }
-     });
+      });
      
-     if (taskDocForWorkspaceCheck && taskDocForWorkspaceCheck.objectiveId && (taskDocForWorkspaceCheck.objectiveId as any).workspaceId) {
-         const workspace = (taskDocForWorkspaceCheck.objectiveId as any).workspaceId as IWorkspace;
-         if (workspace && workspace.memberIds) {
-             if (!workspace.memberIds.map(id => id.toString()).includes(validUpdates.assigneeId)) {
-                 return { error: "Assignee is not a member of this workspace." };
-             }
-             validUpdates.assigneeId = new mongoose.Types.ObjectId(validUpdates.assigneeId);
-         } else {
-            return { error: "Could not verify workspace membership for assignee. Workspace details missing or not populated correctly."};
-         }
-     } else {
-        return { error: "Could not find task or objective to verify assignee. Task or objective might not exist or lacks workspace information."};
-     }
-  } else if (validUpdates.assigneeId === undefined) {
-      delete validUpdates.assigneeId; 
+      if (taskDocForWorkspaceCheck && taskDocForWorkspaceCheck.objectiveId && (taskDocForWorkspaceCheck.objectiveId as any).workspaceId) {
+          const workspace = (taskDocForWorkspaceCheck.objectiveId as any).workspaceId as IWorkspace;
+          if (workspace && workspace.memberIds) {
+              if (!workspace.memberIds.map(id => id.toString()).includes(rawUpdates.assigneeId)) {
+                  return { error: "Assignee is not a member of this workspace." };
+              }
+              updatesForSet.assigneeId = new mongoose.Types.ObjectId(rawUpdates.assigneeId);
+          } else {
+             return { error: "Could not verify workspace membership for assignee. Workspace details missing."};
+          }
+      } else {
+         return { error: "Could not find task or objective to verify assignee."};
+      }
+    }
   }
 
+  if (Object.keys(updatesForSet).length === 0) {
+    // No actual updates to perform, return current task
+     const currentTaskDoc = await TaskCollection.findById(taskId).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
+     if (!currentTaskDoc) return { error: "Task not found."};
+     return serializeDocument<ITask>(currentTaskDoc) as Task;
+  }
 
   try {
     const updatedTaskDoc = await TaskCollection.findByIdAndUpdate(
       taskId,
-      { $set: validUpdates }, 
+      { $set: updatesForSet }, 
       { new: true, runValidators: true }
     ).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
 
@@ -600,9 +629,11 @@ export async function updateTaskAction(
     }
     revalidatePath("/");
     return serializeDocument<ITask>(updatedTaskDoc) as Task;
-  } catch (error: any)
-{
+  } catch (error: any) {
     console.error("Error updating task:", error);
     return { error: "Failed to update task. " + error.message };
   }
 }
+
+
+    
