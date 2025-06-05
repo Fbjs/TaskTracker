@@ -65,12 +65,14 @@ export const ObjectiveDialog = ({
           id: task.id,
           description: task.description,
           assigneeId: task.assigneeId || undefined,
+          isNew: false, // Mark existing tasks as not new
+          isDeleted: false,
         }))
       );
       setAiPrompt("");
     } else {
       setObjectiveDescription("");
-      setTasks([{ description: "", isNew: true }]);
+      setTasks([{ description: "", isNew: true, isDeleted: false }]);
       setAiPrompt("");
     }
     setIsAiLoading(false);
@@ -117,30 +119,28 @@ export const ObjectiveDialog = ({
       toast({ title: "AI Suggestion Failed", description: result.error, variant: "destructive" });
     } else {
       setObjectiveDescription(result.objectiveDescription);
-      setTasks(result.tasks.map(task => ({ description: task.taskDescription, assigneeId: undefined, isNew: true })));
+      setTasks(result.tasks.map(task => ({ description: task.taskDescription, assigneeId: undefined, isNew: true, isDeleted: false })));
       toast({ title: "AI Suggestions Applied", description: "Review and assign tasks to workspace members." });
     }
   };
 
   const handleTaskChange = (index: number, field: keyof EditableTask, value: string | boolean | undefined) => {
     const newTasks = [...tasks];
-    (newTasks[index] as any)[field] = value; // Type assertion for flexibility
+    (newTasks[index] as any)[field] = value; 
     setTasks(newTasks);
   };
 
   const handleAddTask = () => {
-    setTasks([...tasks, { description: "", isNew: true }]);
+    setTasks([...tasks, { description: "", isNew: true, isDeleted: false }]);
   };
 
   const handleRemoveTask = (index: number) => {
     const taskToRemove = tasks[index];
     if (taskToRemove.isNew) {
-      // If it's a new task (not yet saved), remove it directly from the array
       setTasks(tasks.filter((_, i) => i !== index));
     } else {
-      // If it's an existing task, mark it for deletion
       const newTasks = [...tasks];
-      newTasks[index].isDeleted = !newTasks[index].isDeleted; // Toggle deletion state
+      newTasks[index].isDeleted = !newTasks[index].isDeleted; 
       setTasks(newTasks);
     }
   };
@@ -178,12 +178,7 @@ export const ObjectiveDialog = ({
         const tasksToDeleteIds = tasks
           .filter(t => !t.isNew && t.isDeleted && t.id)
           .map(t => t.id!);
-
-        // For existing tasks that are not new and not deleted, check if they were modified.
-        // This part is tricky if we want to allow editing existing task details here.
-        // For now, this dialog focuses on adding/deleting tasks from an objective.
-        // To edit existing task details (description, assignee), user should use TaskDialog.
-
+        
         const result = await updateObjectiveAction(
             objectiveToEdit.id, 
             objectiveDescription,
@@ -198,7 +193,7 @@ export const ObjectiveDialog = ({
           toast({ title: "Objective Updated", description: `"${result.description}" has been successfully updated.` });
           onOpenChange(false);
         }
-      } else { // Create mode
+      } else { 
         const tasksToSubmit = tasks
           .filter(t => !t.isDeleted && t.description.trim() !== "")
           .map(t => ({ description: t.description, assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId }));
@@ -227,8 +222,7 @@ export const ObjectiveDialog = ({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) {
-        setWorkspaceMembers([]); // Clear members when dialog truly closes
-        // Resetting state is now handled by useEffect on isOpen
+        setWorkspaceMembers([]); 
       }
       onOpenChange(open);
     }}>
@@ -241,7 +235,7 @@ export const ObjectiveDialog = ({
             </DialogDescription>
           )}
         </DialogHeader>
-        <ScrollArea className="flex-grow pr-6 -mr-6">
+        <ScrollArea className="flex-grow pr-6 -mr-6"> {/* Main dialog scroll */}
           <form onSubmit={handleSubmit} className="space-y-6 py-4" id="objective-dialog-form">
             {!isEditMode && (
               <div>
@@ -272,44 +266,48 @@ export const ObjectiveDialog = ({
               />
             </div>
 
-            {/* Task management section - now available in both create and edit modes */}
             <div>
               <Label className="font-semibold">Tasks</Label>
-              {tasks.map((task, index) => (
-                !task.isDeleted || task.isNew ? ( // Show if not deleted OR if new (new tasks marked deleted are just hidden)
-                <div key={task.id || `new-${index}`} className={`mt-2 p-3 border rounded-md space-y-2 ${task.isDeleted && !task.isNew ? 'bg-red-100 dark:bg-red-900/30 opacity-70' : 'bg-muted/30'}`}>
-                  <div className="flex items-start gap-2">
-                    <Textarea
-                      value={task.description}
-                      onChange={(e) => handleTaskChange(index, "description", e.target.value)}
-                      placeholder={`Task ${index + 1} description`}
-                      className={`flex-grow ${task.isDeleted && !task.isNew ? 'line-through' : ''}`}
-                      rows={2}
-                      disabled={task.isDeleted && !task.isNew}
-                    />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(index)} title={task.isDeleted && !task.isNew ? "Undo Remove" : "Remove Task"}>
-                      {task.isDeleted && !task.isNew ? <PlusCircle className="h-4 w-4 text-green-600" /> : <Trash2 className="h-4 w-4 text-destructive" />}
-                    </Button>
+              <div className="mt-1 max-h-[250px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10"> {/* Task list scrollable container */}
+                {tasks.map((task, index) => (
+                  (!task.isDeleted || task.isNew || (task.isDeleted && isEditMode)) ? ( 
+                  <div key={task.id || `new-${index}-${Date.now()}`} className={`p-3 border rounded-md space-y-2 ${task.isDeleted && !task.isNew ? 'bg-red-100/50 dark:bg-red-900/20 opacity-60' : 'bg-background shadow-sm'}`}>
+                    <div className="flex items-start gap-2">
+                      <Textarea
+                        value={task.description}
+                        onChange={(e) => handleTaskChange(index, "description", e.target.value)}
+                        placeholder={`Task ${index + 1} description`}
+                        className={`flex-grow ${task.isDeleted && !task.isNew ? 'line-through' : ''}`}
+                        rows={2}
+                        disabled={task.isDeleted && !task.isNew}
+                      />
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(index)} title={task.isDeleted && !task.isNew ? "Undo Remove" : "Remove Task"}>
+                        {task.isDeleted && !task.isNew ? <PlusCircle className="h-4 w-4 text-green-600" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+                      </Button>
+                    </div>
+                     <Select
+                        value={task.assigneeId || "unassigned"}
+                        onValueChange={(value: string) => handleTaskChange(index, "assigneeId", value === "unassigned" ? undefined : value)}
+                        disabled={isLoadingMembers || (task.isDeleted && !task.isNew)}
+                      >
+                      <SelectTrigger className="mt-1">
+                         <SelectValue placeholder={isLoadingMembers ? "Loading members..." : "Assign to (optional)"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {workspaceMembers.map(member => (
+                          <SelectItem key={member.id} value={member.id}>{member.email}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                   <Select
-                      value={task.assigneeId || "unassigned"}
-                      onValueChange={(value: string) => handleTaskChange(index, "assigneeId", value === "unassigned" ? undefined : value)}
-                      disabled={isLoadingMembers || (task.isDeleted && !task.isNew)}
-                    >
-                    <SelectTrigger className="mt-1">
-                       <SelectValue placeholder={isLoadingMembers ? "Loading members..." : "Assign to (optional)"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {workspaceMembers.map(member => (
-                        <SelectItem key={member.id} value={member.id}>{member.email}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                ) : null 
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={handleAddTask} className="mt-2">
+                  ) : null 
+                ))}
+                 {tasks.filter(t => !t.isDeleted || (t.isDeleted && isEditMode && !t.isNew)).length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-3">No tasks added yet.</p>
+                )}
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={handleAddTask} className="mt-3">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Task
               </Button>
             </div>
@@ -328,6 +326,3 @@ export const ObjectiveDialog = ({
     </Dialog>
   );
 };
-
-
-    
