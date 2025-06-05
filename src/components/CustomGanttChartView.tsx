@@ -52,29 +52,42 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
         const allTaskStartDates = tasksWithDates.map(t => startOfDay(getValidDate(t.startDate || t.createdAt)!));
         const allTaskEndDates = tasksWithDates.map(t => startOfDay(getValidDate(t.dueDate)!));
 
-        const overallMinDate = startOfDay(new Date(Math.min(...allTaskStartDates.map(d => d.getTime()))));
+        let overallMinDate = startOfDay(new Date(Math.min(...allTaskStartDates.map(d => d.getTime()))));
         let tempOverallMaxDate = startOfDay(new Date(Math.max(...allTaskEndDates.map(d => d.getTime()))));
         
+        if (!isValid(overallMinDate) && tasksWithDates.length > 0) {
+            // Fallback if min date calculation fails but there are tasks
+            overallMinDate = startOfDay(getValidDate(tasksWithDates[0].startDate || tasksWithDates[0].createdAt)!);
+        }
+        if (!isValid(tempOverallMaxDate) && tasksWithDates.length > 0) {
+             // Fallback if max date calculation fails but there are tasks
+            tempOverallMaxDate = startOfDay(getValidDate(tasksWithDates[0].dueDate)!);
+             if (!isValid(tempOverallMaxDate) && isValid(overallMinDate)) tempOverallMaxDate = overallMinDate; // further fallback
+        }
+
+
         if (isValid(overallMinDate) && isValid(tempOverallMaxDate) && tempOverallMaxDate.getTime() < overallMinDate.getTime()) {
             tempOverallMaxDate = overallMinDate;
         }
-        if (isValid(overallMinDate) && isValid(tempOverallMaxDate) && differenceInDays(tempOverallMaxDate, overallMinDate) < 0) {
-             tempOverallMaxDate = overallMinDate; 
-        }
-
+        
         const overallMaxDate = tempOverallMaxDate;
 
         let chartDays: Date[] = [];
         if (isValid(overallMinDate) && isValid(overallMaxDate) && overallMaxDate.getTime() >= overallMinDate.getTime()) {
-           chartDays = eachDayOfInterval({ start: overallMinDate, end: addDays(overallMaxDate, 0) }); // Use addDays(overallMaxDate, 0) to include the last day
+           chartDays = eachDayOfInterval({ start: overallMinDate, end: addDays(overallMaxDate, 0) }); 
         } else {
-           if (isValid(overallMinDate)) chartDays = [overallMinDate];
-           else return (
-                <Card key={objective.id} className="shadow-lg">
-                  <CardHeader><CardTitle className="font-headline">{objective.description}</CardTitle></CardHeader>
-                  <CardContent><p className="text-destructive">Error: Invalid date range for Gantt chart header (Objective: {objective.description}). MinDate: {overallMinDate.toString()}, MaxDate: {overallMaxDate.toString()}</p></CardContent>
-                </Card>
-              );
+           if (isValid(overallMinDate)) chartDays = [overallMinDate]; // Gantt for a single day if only minDate is valid
+           else if (isValid(overallMaxDate)) { // If only maxDate is valid (should not happen with current logic but for safety)
+             chartDays = [overallMaxDate];
+             overallMinDate = overallMaxDate; // Align minDate
+           } else { // No valid date range could be determined
+             return (
+                  <Card key={objective.id} className="shadow-lg">
+                    <CardHeader><CardTitle className="font-headline">{objective.description}</CardTitle></CardHeader>
+                    <CardContent><p className="text-destructive">Error: Invalid date range for Gantt chart header (Objective: {objective.description}).</p></CardContent>
+                  </Card>
+                );
+           }
         }
 
         const DAY_WIDTH = 40; // pixels
@@ -89,7 +102,7 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                 <div className="relative pt-8">
 
                   <div className="flex sticky top-0 z-10 bg-background/80 backdrop-blur-sm mb-1">
-                    <div className="sticky left-0 z-20 bg-background/80 backdrop-blur-sm min-w-[150px] md:min-w-[200px] p-2 border-r border-b font-semibold text-xs text-muted-foreground">Task</div>
+                    <div className="sticky left-0 z-20 bg-background/80 backdrop-blur-sm min-w-[200px] md:min-w-[300px] p-2 border-r border-b font-semibold text-xs text-muted-foreground">Task</div>
                     {chartDays.map((day, dayIdx) => (
                       <div
                         key={`day-header-${objective.id}-${dayIdx}`}
@@ -115,15 +128,14 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                     const durationDays = Math.max(1, differenceInDays(validatedTaskEnd, taskStart) + 1); 
 
                     const barOffset = startDayIndex * DAY_WIDTH;
-                    // Adjust barWidth to be 1px less to fit before the right border of the last cell
-                    const calculatedBarWidth = (durationDays * DAY_WIDTH) - 1;
-                    const barWidth = Math.max(0, calculatedBarWidth); // Ensure width is not negative
+                    const calculatedBarWidth = (durationDays * DAY_WIDTH) -1 ; // Subtract 1px to fit before border
+                    const barWidth = Math.max(0, calculatedBarWidth);
 
                     const priorityColor = PRIORITY_COLORS[task.priority] || 'bg-gray-400';
 
                     return (
                       <div key={task.id} className="flex items-center border-b hover:bg-muted/30 h-10">
-                        <div className="sticky left-0 z-10 bg-background/50 backdrop-blur-sm min-w-[150px] md:min-w-[200px] p-2 text-xs border-r truncate" title={task.description}>
+                        <div className="sticky left-0 z-10 bg-background/50 backdrop-blur-sm min-w-[200px] md:min-w-[300px] p-2 text-xs border-r truncate" title={task.description}>
                           {task.description}
                         </div>
                         <div className="relative h-full" style={{ width: `${chartDays.length * DAY_WIDTH}px`}}>
@@ -133,7 +145,7 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                               left: `${barOffset}px`,
                               width: `${barWidth}px`,
                             }}
-                            title={`${task.description} (${format(taskStartRaw, 'MMM d')} - ${format(taskEndRaw, 'MMM d')})`}
+                            title={`${format(taskStartRaw, 'MMM d')} - ${format(taskEndRaw, 'MMM d')}`}
                           >
                           </div>
                         </div>
@@ -150,3 +162,4 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
     </div>
   );
 };
+
