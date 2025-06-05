@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, LogOut, Briefcase, ChevronDown, Settings, UserCircle, Users } from "lucide-react"; // Added Users
+import { PlusCircle, LogOut, Briefcase, ChevronDown, Settings, UserCircle, Users, Check } from "lucide-react"; // Added Check
 import { LogoIcon } from "@/components/icons/LogoIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -26,7 +26,7 @@ interface AppHeaderProps {
   currentWorkspace?: Workspace; 
   onWorkspaceSelected: (workspaceId: string) => void; 
   onWorkspaceCreated: (newWorkspace: Workspace) => void; 
-  onManageMembers: () => void; // Added
+  onManageMembers: () => void; 
 }
 
 export const AppHeader = ({ 
@@ -35,7 +35,7 @@ export const AppHeader = ({
   currentWorkspace, 
   onWorkspaceSelected,
   onWorkspaceCreated,
-  onManageMembers // Added
+  onManageMembers 
 }: AppHeaderProps) => {
   const { user, logout } = useAuth();
   const [isWorkspaceDialogOpen, setIsWorkspaceDialogOpen] = useState(false);
