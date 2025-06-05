@@ -8,13 +8,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
 import { SummaryMetrics } from "@/components/SummaryMetrics";
 import { ObjectiveDashboard } from "@/components/ObjectiveDashboard";
-import { GanttChartView } from "@/components/GanttChartView";
+// import { GanttChartView } from "@/components/GanttChartView"; // Old Recharts Gantt
+import { CustomGanttChartView } from "@/components/CustomGanttChartView"; // New Custom Gantt
 import { TableView } from "@/components/TableView";
 import { ObjectiveDialog } from "@/components/ObjectiveDialog";
 import { TaskDialog } from "@/components/TaskDialog";
-import { ManageMembersDialog } from "@/components/ManageMembersDialog"; // Added
+import { ManageMembersDialog } from "@/components/ManageMembersDialog"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutGrid, BarChartHorizontalBig, Loader2, ListTree, Users } from "lucide-react"; // Added Users
+import { LayoutGrid, BarChartHorizontalBig, Loader2, ListTree, Users } from "lucide-react"; 
 import { getInitialData, updateTaskStatusAction, updateObjectiveAction, updateTaskAction, createWorkspaceAction } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 
@@ -36,23 +37,28 @@ export default function Home() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [currentObjectiveIdForTask, setCurrentObjectiveIdForTask] = useState<string | null>(null);
   
-  const [isManageMembersDialogOpen, setIsManageMembersDialogOpen] = useState(false); // Added
+  const [isManageMembersDialogOpen, setIsManageMembersDialogOpen] = useState(false); 
 
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 
+  const processSingleTask = useCallback((task: Task): Task => {
+    return {
+      ...task,
+      startDate: task.startDate ? new Date(task.startDate) : undefined,
+      dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+      createdAt: task.createdAt ? new Date(task.createdAt) : new Date(),
+    };
+  }, []);
+  
   const processRawObjective = useCallback((rawObj: Objective): Objective => {
     return {
       ...rawObj,
       userId: rawObj.userId || user?.id, 
       workspaceId: rawObj.workspaceId || currentWorkspace?.id, 
-      tasks: rawObj.tasks.map(task => ({
-        ...task,
-        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-        createdAt: new Date(task.createdAt),
-        // Assignee details are now populated by backend if assigneeId exists
-      })),
+      tasks: rawObj.tasks?.map(processSingleTask) || [],
     };
-  }, [user?.id, currentWorkspace?.id]);
+  }, [user?.id, currentWorkspace?.id, processSingleTask]);
+
 
   const loadData = useCallback(async () => {
     if (!user) return; 
@@ -66,7 +72,7 @@ export default function Home() {
         const foundWorkspace = data.workspaces.find(ws => ws.id === lastSelectedWorkspaceId);
         setCurrentWorkspace(foundWorkspace || data.workspaces[0]);
       } else {
-        setCurrentWorkspace(null); // No workspaces, or default one was just created
+        setCurrentWorkspace(null); 
       }
 
       setObjectives(data.objectives.map(processRawObjective));
@@ -133,11 +139,7 @@ export default function Home() {
   };
 
   const handleTaskSaved = (savedTask: Task) => {
-     const processedSavedTask = {
-      ...savedTask,
-      dueDate: savedTask.dueDate ? new Date(savedTask.dueDate) : undefined,
-      createdAt: new Date(savedTask.createdAt),
-    };
+     const processedSavedTask = processSingleTask(savedTask);
 
     setObjectives(prevObjectives =>
       prevObjectives.map(obj => {
@@ -147,7 +149,7 @@ export default function Home() {
             ...obj,
             tasks: taskExists 
                     ? obj.tasks.map(t => t.id === processedSavedTask.id ? processedSavedTask : t)
-                    : [...obj.tasks, processedSavedTask], // Add if new (though this dialog is for edit)
+                    : [...obj.tasks, processedSavedTask], 
           };
         }
         return obj;
@@ -160,7 +162,7 @@ export default function Home() {
 
   const handleTaskStatusChange = async (taskId: string, newStatus: TaskStatus, oldStatus: TaskStatus, objectiveId: string) => {
     if (newStatus === oldStatus) return;
-    const originalObjectives = JSON.parse(JSON.stringify(objectives)); // Deep copy for rollback
+    const originalObjectives = JSON.parse(JSON.stringify(objectives)); 
 
     setObjectives(prevObjectives =>
       prevObjectives.map(obj =>
@@ -181,14 +183,14 @@ export default function Home() {
         setObjectives(originalObjectives.map(processRawObjective)); 
         toast({ title: "Update Failed", description: result.error || "Could not update task status.", variant: "destructive" });
       } else {
-         // Update the specific task with the result from the server to get populated assignee details
+        
         setObjectives(prevObjectives =>
           prevObjectives.map(obj =>
             obj.id === objectiveId
               ? {
                   ...obj,
                   tasks: obj.tasks.map(t =>
-                    t.id === taskId ? { ...processRawObjective({tasks:[]}).tasks[0], ...result.task } : t // Bit of a hack to process single task
+                    t.id === taskId ? processSingleTask(result.task!) : t 
                   ),
                 }
               : obj
@@ -237,6 +239,8 @@ export default function Home() {
     if (currentWorkspace?.id === updatedWorkspace.id) {
       setCurrentWorkspace(updatedWorkspace);
     }
+     // Refresh objectives to potentially update assignee details if a member was removed and tasks unassigned
+    loadData();
   };
 
 
@@ -259,7 +263,7 @@ export default function Home() {
           currentWorkspace={currentWorkspace || undefined}
           onWorkspaceSelected={handleWorkspaceSelected}
           onWorkspaceCreated={handleWorkspaceCreated}
-          onManageMembers={handleOpenManageMembers} // Added
+          onManageMembers={handleOpenManageMembers} 
         />
         <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-accent" />
@@ -276,7 +280,7 @@ export default function Home() {
         currentWorkspace={currentWorkspace || undefined}
         onWorkspaceSelected={handleWorkspaceSelected}
         onWorkspaceCreated={handleWorkspaceCreated}
-        onManageMembers={handleOpenManageMembers} // Added
+        onManageMembers={handleOpenManageMembers} 
       />
       <main className="flex-grow container mx-auto px-4 py-8">
         {!currentWorkspace && workspaces.length > 0 && (
@@ -318,7 +322,7 @@ export default function Home() {
                 />
               </TabsContent>
               <TabsContent value="gantt">
-                <GanttChartView objectives={filteredObjectives} />
+                <CustomGanttChartView objectives={filteredObjectives} />
               </TabsContent>
               <TabsContent value="table">
                 <TableView objectives={filteredObjectives} />
@@ -337,17 +341,17 @@ export default function Home() {
           currentUserId={user?.id}
         />
       )}
-      {editingTask && currentObjectiveIdForTask && currentWorkspace && ( // Ensure currentWorkspace is available
+      {editingTask && currentObjectiveIdForTask && currentWorkspace && ( 
         <TaskDialog
           isOpen={isTaskDialogOpen}
           onOpenChange={setIsTaskDialogOpen}
           task={editingTask}
           objectiveId={currentObjectiveIdForTask}
           onTaskSaved={handleTaskSaved}
-          currentWorkspaceId={currentWorkspace.id} // Pass workspace ID
+          currentWorkspaceId={currentWorkspace.id} 
         />
       )}
-      {currentWorkspace && user && ( // Added conditional rendering for ManageMembersDialog
+      {currentWorkspace && user && ( 
          <ManageMembersDialog
           isOpen={isManageMembersDialogOpen}
           onOpenChange={setIsManageMembersDialogOpen}
@@ -359,3 +363,4 @@ export default function Home() {
     </div>
   );
 }
+
