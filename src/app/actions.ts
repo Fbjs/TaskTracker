@@ -643,6 +643,8 @@ export async function updateTaskAction(
   const updatePayload: { $set: any, $unset: any } = { $set: {}, $unset: {} };
   let changedFields = 0;
 
+  console.log(rawUpdates)
+
   // Description, Status, Priority (Directly set if provided and different)
   if (rawUpdates.hasOwnProperty('description') && rawUpdates.description !== undefined && rawUpdates.description !== taskToUpdate.description) {
     updatePayload.$set.description = rawUpdates.description;
