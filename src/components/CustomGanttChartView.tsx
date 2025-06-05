@@ -1,10 +1,9 @@
-
 "use client";
 
 import type { Objective, Task, TaskPriority } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { format, differenceInDays, addDays, eachDayOfInterval, parseISO, isValid, max } from 'date-fns';
+import { format, differenceInDays, addDays, eachDayOfInterval, parseISO, isValid, startOfDay } from 'date-fns';
 
 interface CustomGanttChartViewProps {
   objectives: Objective[];
@@ -29,12 +28,11 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
 
   return (
     <div className="space-y-8">
-      {objectives.map((objective, objIndex) => {
+      {objectives.map((objective) => {
         const tasksWithDates = objective.tasks.filter(task => {
           const start = getValidDate(task.startDate || task.createdAt);
           const end = getValidDate(task.dueDate);
-          // Ensure both start and end dates are valid, and end is not before start
-          return start && end && end.getTime() >= start.getTime();
+          return start && end && startOfDay(end).getTime() >= startOfDay(start).getTime();
         });
 
         if (tasksWithDates.length === 0) {
@@ -50,21 +48,22 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
           );
         }
 
-        const allStartDates = tasksWithDates.map(t => getValidDate(t.startDate || t.createdAt)!);
-        const allEndDates = tasksWithDates.map(t => getValidDate(t.dueDate)!);
+        const allStartDates = tasksWithDates.map(t => startOfDay(getValidDate(t.startDate || t.createdAt)!));
+        const allEndDates = tasksWithDates.map(t => startOfDay(getValidDate(t.dueDate)!));
 
         const overallMinDate = new Date(Math.min(...allStartDates.map(d => d.getTime())));
-        // Ensure overallMaxDate is at least overallMinDate or one day after if they are the same
+        
         let tempOverallMaxDate = new Date(Math.max(...allEndDates.map(d => d.getTime())));
-        if (isValid(overallMinDate) && isValid(tempOverallMaxDate) && tempOverallMaxDate.getTime() < overallMinDate.getTime()) {
+        if (tempOverallMaxDate.getTime() < overallMinDate.getTime()) {
             tempOverallMaxDate = overallMinDate;
         }
-        const overallMaxDate = isValid(tempOverallMaxDate) ? tempOverallMaxDate : addDays(overallMinDate,1);
+        const overallMaxDate = tempOverallMaxDate;
 
 
         let chartDays: Date[] = [];
         if (isValid(overallMinDate) && isValid(overallMaxDate) && overallMaxDate.getTime() >= overallMinDate.getTime()) {
-           chartDays = eachDayOfInterval({ start: overallMinDate, end: addDays(overallMaxDate, 1) }); 
+           // Add 1 day to overallMaxDate for the interval end to include the last day fully
+           chartDays = eachDayOfInterval({ start: overallMinDate, end: addDays(overallMaxDate, 0) }); 
         } else {
            return (
             <Card key={objective.id} className="shadow-lg">
@@ -100,20 +99,23 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                   </div>
 
                   
-                  {tasksWithDates.map((task, taskIdx) => {
-                    const taskStart = getValidDate(task.startDate || task.createdAt)!;
-                    const taskEnd = getValidDate(task.dueDate)!;
+                  {tasksWithDates.map((task) => {
+                    const taskStartRaw = getValidDate(task.startDate || task.createdAt)!;
+                    const taskEndRaw = getValidDate(task.dueDate)!;
 
-                    // Ensure taskStart is not after taskEnd, if so, make taskEnd same as taskStart for 1 day duration
+                    const taskStart = startOfDay(taskStartRaw);
+                    const taskEnd = startOfDay(taskEndRaw);
+                    
                     const validatedTaskEnd = taskEnd.getTime() < taskStart.getTime() ? taskStart : taskEnd;
 
                     const startDayIndex = differenceInDays(taskStart, overallMinDate);
                     
-                    // Calculate duration based on validatedTaskEnd
                     const durationDays = Math.max(0, differenceInDays(validatedTaskEnd, taskStart)) + 1; 
 
                     const barOffset = startDayIndex * DAY_WIDTH;
-                    const barWidth = durationDays * DAY_WIDTH - 2; 
+                    // Subtract a small amount for visual padding between bars, ensure it's not wider than the day width for 1-day tasks
+                    const barWidth = Math.max(0, (durationDays * DAY_WIDTH) - (DAY_WIDTH > 2 ? 2 : 0) );
+
 
                     const priorityColor = PRIORITY_COLORS[task.priority] || 'bg-gray-500';
 
@@ -124,15 +126,14 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                         </div>
                         <div className="relative h-full" style={{ width: `${chartDays.length * DAY_WIDTH}px`}}>
                           <div
-                            className={`absolute top-1/2 -translate-y-1/2 h-6 rounded shadow ${priorityColor}`}
+                            className={`absolute top-1/2 -translate-y-1/2 h-6 rounded shadow-md ${priorityColor}`}
                             style={{
                               left: `${barOffset}px`,
                               width: `${barWidth}px`,
-                              minWidth: `${Math.max(0, DAY_WIDTH - 2)}px` // Ensure minWidth is not negative
+                              minWidth: `${Math.max(0, DAY_WIDTH - (DAY_WIDTH > 2 ? 2 : 0))}` 
                             }}
-                            title={`${task.description} (${format(taskStart, 'MMM d')} - ${format(validatedTaskEnd, 'MMM d')})`}
+                            title={`${task.description} (${format(taskStartRaw, 'MMM d')} - ${format(taskEndRaw, 'MMM d')})`}
                           >
-                           {/* Task name removed from here */}
                           </div>
                         </div>
                       </div>
@@ -152,3 +153,4 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
 // Ensure text-xxs is defined in globals.css if not already:
 // .text-xxs { font-size: 0.625rem; /* 10px */ }
 // Or use an existing Tailwind class like text-[10px]
+// Ensure shadow-md is used on bars for better visibility if colors are light.
