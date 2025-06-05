@@ -19,8 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Loader2 } from "lucide-react"; // Removed Users icon
-import { format } from "date-fns"; 
+import { CalendarIcon, Loader2 } from "lucide-react"; 
+import { format, isValid } from "date-fns"; 
 import { useToast } from "@/hooks/use-toast";
 import { updateTaskAction, getWorkspaceMembersAction } from "@/app/actions";
 
@@ -44,7 +44,7 @@ export const TaskDialog = ({
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("To Do");
   const [priority, setPriority] = useState<TaskPriority>("Medium");
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined); // Added startDate state
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined); 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,13 +52,19 @@ export const TaskDialog = ({
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const { toast } = useToast();
 
+  const parseDate = (dateInput: Date | string | undefined): Date | undefined => {
+    if (!dateInput) return undefined;
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    return isValid(date) ? date : undefined;
+  };
+
   useEffect(() => {
     if (isOpen && task) {
       setDescription(task.description);
       setStatus(task.status);
       setPriority(task.priority);
-      setStartDate(task.startDate ? new Date(task.startDate) : undefined); // Set startDate from task
-      setDueDate(task.dueDate ? new Date(task.dueDate) : undefined);
+      setStartDate(parseDate(task.startDate));
+      setDueDate(parseDate(task.dueDate));
       setAssigneeId(task.assigneeId || undefined);
       setIsSubmitting(false);
     }
@@ -92,21 +98,27 @@ export const TaskDialog = ({
 
     setIsSubmitting(true);
     try {
-      const updates: Partial<Omit<Task, 'id' | 'objectiveId' | 'createdAt' | 'assignee'>> & { assigneeId?: string | null } = {
-        description,
-        status,
-        priority,
-        startDate: startDate || null, // Send null if undefined to clear it
-        dueDate: dueDate || null, // Send null if undefined to clear it
-        assigneeId: assigneeId || null, 
-      };
+      // Only include fields in the update payload if they have changed or are being explicitly set/cleared.
+      // The server action will compare with current DB values.
+      const updates: Partial<Omit<Task, 'id' | 'objectiveId' | 'createdAt' | 'assignee'>> & { assigneeId?: string | null } = {};
+
+      // Always send description, status, priority as they are core fields
+      updates.description = description;
+      updates.status = status;
+      updates.priority = priority;
+      
+      // For optional fields, send them if they are set (Date object) or explicitly cleared (null)
+      // The server action is now responsible for comparing with the existing value in DB
+      updates.startDate = startDate || null;
+      updates.dueDate = dueDate || null;
+      updates.assigneeId = assigneeId || null;
       
       const result = await updateTaskAction(task.id, objectiveId, updates);
       if ("error" in result) {
          toast({ title: "Error updating task", description: result.error, variant: "destructive" });
       } else {
         onTaskSaved(result); 
-        toast({ title: "Task Updated", description: `"${description}" has been successfully updated.` });
+        toast({ title: "Task Updated", description: `"${result.description}" has been successfully updated.` });
         onOpenChange(false);
       }
     } catch (error) {
@@ -123,7 +135,7 @@ export const TaskDialog = ({
       }
       onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-[600px]"> {/* Increased width for more fields */}
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Edit Task</DialogTitle>
           <DialogDescription>
@@ -183,14 +195,14 @@ export const TaskDialog = ({
                       id="task-start-date"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                      {startDate && isValid(startDate) ? format(startDate, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
                     <Calendar
                       mode="single"
                       selected={startDate}
-                      onSelect={setStartDate}
+                      onSelect={(date) => setStartDate(date || undefined)} // Ensure undefined if cleared
                       initialFocus
                     />
                   </PopoverContent>
@@ -206,16 +218,16 @@ export const TaskDialog = ({
                       id="task-due-date"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                      {dueDate && isValid(dueDate) ? format(dueDate, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
                     <Calendar
                       mode="single"
                       selected={dueDate}
-                      onSelect={setDueDate}
+                      onSelect={(date) => setDueDate(date || undefined)} // Ensure undefined if cleared
                       initialFocus
-                      disabled={startDate ? { before: startDate } : undefined} // Disable dates before startDate
+                      disabled={startDate && isValid(startDate) ? { before: startDate } : undefined} 
                     />
                   </PopoverContent>
                 </Popover>

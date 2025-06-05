@@ -17,10 +17,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Added
-import { Calendar } from "@/components/ui/calendar"; // Added
-import { Sparkles, PlusCircle, Trash2, Loader2, CalendarIcon } from "lucide-react"; // Added CalendarIcon
-import { format } from "date-fns"; // Added
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Sparkles, PlusCircle, Trash2, Loader2, CalendarIcon } from "lucide-react";
+import { format, isValid } from "date-fns"; 
 import { useToast } from "@/hooks/use-toast";
 import { handleSuggestTasks, addObjectiveAction, updateObjectiveAction, getWorkspaceMembersAction } from "@/app/actions";
 
@@ -38,8 +38,8 @@ interface EditableTask {
   id?: string; 
   description: string;
   assigneeId?: string;
-  startDate?: Date; // Added
-  dueDate?: Date;   // Added
+  startDate?: Date; 
+  dueDate?: Date;   
   isNew?: boolean; 
   isDeleted?: boolean; 
 }
@@ -63,10 +63,11 @@ export const ObjectiveDialog = ({
 
   const isEditMode = !!objectiveToEdit;
 
-  const generateTempId = useCallback(() => {
+  const generateTempId = useCallback((): string => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
     }
+    // Fallback UUID generator
     let d = new Date().getTime();
     if (typeof performance !== 'undefined' && typeof performance.now === 'function'){
       d += performance.now(); 
@@ -78,6 +79,13 @@ export const ObjectiveDialog = ({
     });
   }, []);
 
+  const parseDate = (dateInput: Date | string | undefined): Date | undefined => {
+    if (!dateInput) return undefined;
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    return isValid(date) ? date : undefined;
+  };
+
+
   const resetDialogState = useCallback(() => {
     if (isEditMode && objectiveToEdit) {
       setObjectiveDescription(objectiveToEdit.description);
@@ -87,8 +95,8 @@ export const ObjectiveDialog = ({
           id: task.id,
           description: task.description,
           assigneeId: task.assigneeId || undefined,
-          startDate: task.startDate ? new Date(task.startDate) : undefined,
-          dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+          startDate: parseDate(task.startDate),
+          dueDate: parseDate(task.dueDate),
           isNew: false,
           isDeleted: false,
         }))
@@ -194,15 +202,19 @@ export const ObjectiveDialog = ({
     }
 
     const activeTasks = tasks.filter(task => !task.isDeleted);
-    if (activeTasks.length > 0 && activeTasks.some(task => !task.description.trim())) {
-      const allEmptyAndNew = activeTasks.every(task => !task.description.trim() && task.isNew && !task.assigneeId && !task.startDate && !task.dueDate);
-      if (activeTasks.length === 1 && allEmptyAndNew) {
-        // Allow submitting with a single, untouched, new, empty task
-      } else {
-        toast({ title: "Validation Error", description: "All active task descriptions must be filled.", variant: "destructive" });
-        return;
-      }
+    const tasksWithEmptyDescriptions = activeTasks.filter(task => !task.description.trim());
+
+    if (tasksWithEmptyDescriptions.length > 0) {
+        // Allow submission if ALL tasks with empty descriptions are ALSO new AND have no assignee/dates
+        const allProblemTasksAreTrulyEmptyAndNew = tasksWithEmptyDescriptions.every(
+            task => task.isNew && !task.assigneeId && !task.startDate && !task.dueDate
+        );
+        if (!allProblemTasksAreTrulyEmptyAndNew) {
+            toast({ title: "Validation Error", description: "All active task descriptions must be filled.", variant: "destructive" });
+            return;
+        }
     }
+
 
     if (!currentWorkspaceId || !currentUserId) {
       toast({ title: "Error", description: "User or Workspace context is missing.", variant: "destructive" });
@@ -218,8 +230,8 @@ export const ObjectiveDialog = ({
           .map(t => ({ 
             description: t.description, 
             assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId,
-            startDate: t.startDate,
-            dueDate: t.dueDate,
+            startDate: t.startDate || undefined, // Pass Date object or undefined
+            dueDate: t.dueDate || undefined,     // Pass Date object or undefined
            }));
         
         const tasksToDeleteIds = tasks
@@ -227,19 +239,18 @@ export const ObjectiveDialog = ({
           .map(t => t.id!);
         
         const tasksToUpdateData = tasks
-          .filter(t => !t.isNew && !t.isDeleted && t.id && (
-            t.description !== objectiveToEdit.tasks.find(ot => ot.id === t.id)?.description ||
-            (t.assigneeId || undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.assigneeId || undefined) ||
-            (t.startDate ? new Date(t.startDate).toISOString() : undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.startDate ? new Date(objectiveToEdit.tasks.find(ot => ot.id === t.id)!.startDate!).toISOString() : undefined) ||
-            (t.dueDate ? new Date(t.dueDate).toISOString() : undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.dueDate ? new Date(objectiveToEdit.tasks.find(ot => ot.id === t.id)!.dueDate!).toISOString() : undefined)
-          ))
-          .map(t => ({
-            id: t.id!,
-            description: t.description,
-            assigneeId: t.assigneeId === "unassigned" ? null : (t.assigneeId || undefined),
-            startDate: t.startDate || null,
-            dueDate: t.dueDate || null,
-          }));
+          .filter(t => !t.isNew && !t.isDeleted && t.id)
+          .map(t => {
+            // For tasksToUpdate, we send the current values. The action will compare.
+            // Send null if date is undefined in dialog state to indicate clearing
+            return {
+                id: t.id!,
+                description: t.description,
+                assigneeId: t.assigneeId === "unassigned" ? null : (t.assigneeId || null),
+                startDate: t.startDate || null, 
+                dueDate: t.dueDate || null,
+            };
+          });
 
         result = await updateObjectiveAction(
             objectiveToEdit.id, 
@@ -255,8 +266,8 @@ export const ObjectiveDialog = ({
           .map(t => ({ 
             description: t.description, 
             assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId,
-            startDate: t.startDate,
-            dueDate: t.dueDate,
+            startDate: t.startDate || undefined,
+            dueDate: t.dueDate || undefined,
           }));
 
         result = await addObjectiveAction(
@@ -289,7 +300,7 @@ export const ObjectiveDialog = ({
       }
       onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col"> {/* Increased width */}
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="font-headline">{isEditMode ? "Edit Objective" : "Add New Objective"}</DialogTitle>
           {!isEditMode && (
@@ -331,7 +342,7 @@ export const ObjectiveDialog = ({
 
             <div>
               <Label className="font-semibold">Tasks</Label>
-              <div className="mt-1 max-h-[300px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10"> {/* Increased max-h */}
+              <div className="mt-1 max-h-[300px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10">
                 {tasks.map((task) => (
                   (!task.isDeleted || (task.isDeleted && !task.isNew)) && ( 
                   <div 
@@ -363,14 +374,14 @@ export const ObjectiveDialog = ({
                                   disabled={(task.isDeleted && !task.isNew)}
                                 >
                                   <CalendarIcon className="mr-1 h-3 w-3" />
-                                  {task.startDate ? format(task.startDate, "PPP") : <span>Pick start</span>}
+                                  {task.startDate && isValid(task.startDate) ? format(task.startDate, "PPP") : <span>Pick start</span>}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-auto p-0">
                                 <Calendar
                                   mode="single"
                                   selected={task.startDate}
-                                  onSelect={(date) => handleTaskChange(task.tempId, "startDate", date)}
+                                  onSelect={(date) => handleTaskChange(task.tempId, "startDate", date || undefined)}
                                   initialFocus
                                   disabled={(task.isDeleted && !task.isNew)}
                                 />
@@ -388,16 +399,16 @@ export const ObjectiveDialog = ({
                                   disabled={(task.isDeleted && !task.isNew)}
                                 >
                                   <CalendarIcon className="mr-1 h-3 w-3" />
-                                  {task.dueDate ? format(task.dueDate, "PPP") : <span>Pick due</span>}
+                                  {task.dueDate && isValid(task.dueDate) ? format(task.dueDate, "PPP") : <span>Pick due</span>}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-auto p-0">
                                 <Calendar
                                   mode="single"
                                   selected={task.dueDate}
-                                  onSelect={(date) => handleTaskChange(task.tempId, "dueDate", date)}
+                                  onSelect={(date) => handleTaskChange(task.tempId, "dueDate", date || undefined)}
                                   initialFocus
-                                  disabled={(date) => (task.isDeleted && !task.isNew) || (task.startDate && date < task.startDate) || false }
+                                  disabled={(date) => (task.isDeleted && !task.isNew) || (task.startDate && isValid(task.startDate) && date < task.startDate) || false }
                                 />
                               </PopoverContent>
                             </Popover>
