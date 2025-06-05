@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { Objective, User, Task as TaskType } from "@/types"; // Renamed Task to TaskType to avoid conflict
+import type { Objective, User, Task as TaskType } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,17 +24,18 @@ import { handleSuggestTasks, addObjectiveAction, updateObjectiveAction, getWorks
 interface ObjectiveDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onObjectiveSaved: (objective: Objective) => void;
+  onObjectiveSaved: (objective: Objective | { error: string } ) => void;
   objectiveToEdit?: Objective | null;
   currentWorkspaceId?: string;
   currentUserId?: string;
 }
 
 interface EditableTask {
-  id?: string; // Present for existing tasks
+  tempId: string; // Stable temporary ID for React keys
+  id?: string; // Real DB ID, present for existing tasks
   description: string;
   assigneeId?: string;
-  isNew?: boolean; // True if added in this dialog session
+  isNew?: boolean; // True if added in this dialog session or loaded as new
   isDeleted?: boolean; // True if marked for deletion
 }
 
@@ -57,22 +58,25 @@ export const ObjectiveDialog = ({
 
   const isEditMode = !!objectiveToEdit;
 
+  const generateTempId = () => crypto.randomUUID();
+
   const resetDialogState = useCallback(() => {
     if (isEditMode && objectiveToEdit) {
       setObjectiveDescription(objectiveToEdit.description);
       setTasks(
-        objectiveToEdit.tasks.map((task) => ({
+        objectiveToEdit.tasks.map((task: TaskType) => ({
+          tempId: generateTempId(), // Assign tempId for existing tasks too for consistent key usage
           id: task.id,
           description: task.description,
           assigneeId: task.assigneeId || undefined,
-          isNew: false, // Mark existing tasks as not new
+          isNew: false,
           isDeleted: false,
         }))
       );
       setAiPrompt("");
     } else {
       setObjectiveDescription("");
-      setTasks([{ description: "", isNew: true, isDeleted: false }]);
+      setTasks([{ tempId: generateTempId(), description: "", isNew: true, isDeleted: false }]);
       setAiPrompt("");
     }
     setIsAiLoading(false);
@@ -119,30 +123,45 @@ export const ObjectiveDialog = ({
       toast({ title: "AI Suggestion Failed", description: result.error, variant: "destructive" });
     } else {
       setObjectiveDescription(result.objectiveDescription);
-      setTasks(result.tasks.map(task => ({ description: task.taskDescription, assigneeId: undefined, isNew: true, isDeleted: false })));
+      setTasks(result.tasks.map(task => ({ 
+        tempId: generateTempId(), 
+        description: task.taskDescription, 
+        assigneeId: undefined, 
+        isNew: true, 
+        isDeleted: false 
+      })));
       toast({ title: "AI Suggestions Applied", description: "Review and assign tasks to workspace members." });
     }
   };
 
-  const handleTaskChange = (index: number, field: keyof EditableTask, value: string | boolean | undefined) => {
-    const newTasks = [...tasks];
-    (newTasks[index] as any)[field] = value; 
-    setTasks(newTasks);
+  const handleTaskChange = (taskTempId: string, field: keyof Omit<EditableTask, 'tempId' | 'id'>, value: string | boolean | undefined) => {
+    setTasks(currentTasks =>
+      currentTasks.map(task =>
+        task.tempId === taskTempId ? { ...task, [field]: value } : task
+      )
+    );
   };
 
   const handleAddTask = () => {
-    setTasks([...tasks, { description: "", isNew: true, isDeleted: false }]);
+    setTasks(currentTasks => [
+      ...currentTasks, 
+      { tempId: generateTempId(), description: "", isNew: true, isDeleted: false }
+    ]);
   };
 
-  const handleRemoveTask = (index: number) => {
-    const taskToRemove = tasks[index];
-    if (taskToRemove.isNew) {
-      setTasks(tasks.filter((_, i) => i !== index));
-    } else {
-      const newTasks = [...tasks];
-      newTasks[index].isDeleted = !newTasks[index].isDeleted; 
-      setTasks(newTasks);
-    }
+  const handleRemoveTask = (taskTempId: string) => {
+    setTasks(currentTasks => {
+      const taskToRemove = currentTasks.find(t => t.tempId === taskTempId);
+      if (!taskToRemove) return currentTasks;
+
+      if (taskToRemove.isNew) { // If it's a task added in this dialog session, remove it entirely
+        return currentTasks.filter(t => t.tempId !== taskTempId);
+      } else { // If it's an existing task, mark/unmark for deletion
+        return currentTasks.map(t =>
+          t.tempId === taskTempId ? { ...t, isDeleted: !t.isDeleted } : t
+        );
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,15 +172,15 @@ export const ObjectiveDialog = ({
     }
 
     const activeTasks = tasks.filter(task => !task.isDeleted);
-    if (activeTasks.some(task => !task.description.trim()) && activeTasks.length > 0) {
-       if (activeTasks.length === 1 && activeTasks[0].description.trim() === "" && !activeTasks[0].assigneeId && activeTasks[0].isNew) {
-        // Allow submitting with no tasks if the single default empty new task is untouched
-      } else if (activeTasks.some(task => !task.description.trim())) {
+    if (activeTasks.length > 0 && activeTasks.some(task => !task.description.trim())) {
+      const allEmptyAndNew = activeTasks.every(task => !task.description.trim() && task.isNew && !task.assigneeId);
+      if (activeTasks.length === 1 && allEmptyAndNew) {
+        // Allow submitting with a single, untouched, new, empty task (it will be filtered out)
+      } else {
         toast({ title: "Validation Error", description: "All active task descriptions must be filled.", variant: "destructive" });
         return;
       }
     }
-
 
     if (!currentWorkspaceId || !currentUserId) {
       toast({ title: "Error", description: "User or Workspace context is missing.", variant: "destructive" });
@@ -170,6 +189,7 @@ export const ObjectiveDialog = ({
 
     setIsSubmitting(true);
     try {
+      let result;
       if (isEditMode && objectiveToEdit) {
         const newTasksData = tasks
           .filter(t => t.isNew && !t.isDeleted && t.description.trim() !== "")
@@ -179,39 +199,46 @@ export const ObjectiveDialog = ({
           .filter(t => !t.isNew && t.isDeleted && t.id)
           .map(t => t.id!);
         
-        const result = await updateObjectiveAction(
+        const tasksToUpdateData = tasks
+          .filter(t => !t.isNew && !t.isDeleted && t.id && ( // Check if existing task fields changed
+            t.description !== objectiveToEdit.tasks.find(ot => ot.id === t.id)?.description ||
+            (t.assigneeId || undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.assigneeId || undefined)
+          ))
+          .map(t => ({
+            id: t.id!,
+            description: t.description,
+            assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId
+          }));
+
+        result = await updateObjectiveAction(
             objectiveToEdit.id, 
             objectiveDescription,
             newTasksData,
-            tasksToDeleteIds
+            tasksToDeleteIds,
+            tasksToUpdateData // Pass tasks to update
         );
 
-        if ("error" in result) {
-          toast({ title: "Error Updating Objective", description: result.error, variant: "destructive" });
-        } else {
-          onObjectiveSaved(result);
-          toast({ title: "Objective Updated", description: `"${result.description}" has been successfully updated.` });
-          onOpenChange(false);
-        }
       } else { 
         const tasksToSubmit = tasks
           .filter(t => !t.isDeleted && t.description.trim() !== "")
           .map(t => ({ description: t.description, assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId }));
 
-        const result = await addObjectiveAction(
+        result = await addObjectiveAction(
           objectiveDescription,
           tasksToSubmit,
           currentUserId,
           currentWorkspaceId
         );
-        if ("error" in result) {
-            toast({ title: "Error Adding Objective", description: result.error, variant: "destructive" });
-        } else {
-            onObjectiveSaved(result);
-            toast({ title: "Objective Added", description: `"${result.description}" has been successfully created.` });
-            onOpenChange(false);
-        }
       }
+
+      if ("error" in result) {
+        toast({ title: `Error ${isEditMode ? 'Updating' : 'Adding'} Objective`, description: result.error, variant: "destructive" });
+      } else {
+        onObjectiveSaved(result);
+        toast({ title: `Objective ${isEditMode ? 'Updated' : 'Added'}`, description: `"${result.description}" has been successfully ${isEditMode ? 'updated' : 'created'}.` });
+        onOpenChange(false);
+      }
+
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to ${isEditMode ? 'update' : 'add'} objective. ${error.message}`, variant: "destructive" });
     } finally {
@@ -235,7 +262,7 @@ export const ObjectiveDialog = ({
             </DialogDescription>
           )}
         </DialogHeader>
-        <ScrollArea className="flex-grow pr-6 -mr-6"> {/* Main dialog scroll */}
+        <ScrollArea className="flex-grow pr-6 -mr-6">
           <form onSubmit={handleSubmit} className="space-y-6 py-4" id="objective-dialog-form">
             {!isEditMode && (
               <div>
@@ -268,26 +295,26 @@ export const ObjectiveDialog = ({
 
             <div>
               <Label className="font-semibold">Tasks</Label>
-              <div className="mt-1 max-h-[250px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10"> {/* Task list scrollable container */}
-                {tasks.map((task, index) => (
-                  (!task.isDeleted || task.isNew || (task.isDeleted && isEditMode)) ? ( 
-                  <div key={task.id || `new-${index}-${Date.now()}`} className={`p-3 border rounded-md space-y-2 ${task.isDeleted && !task.isNew ? 'bg-red-100/50 dark:bg-red-900/20 opacity-60' : 'bg-background shadow-sm'}`}>
+              <div className="mt-1 max-h-[250px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10">
+                {tasks.map((task) => (
+                  (!task.isDeleted || (task.isDeleted && !task.isNew)) && ( // Show existing tasks marked for deletion, hide new tasks marked for deletion
+                  <div key={task.tempId} className={`p-3 border rounded-md space-y-2 ${task.isDeleted && !task.isNew ? 'bg-red-100/50 dark:bg-red-900/20 opacity-70' : 'bg-background shadow-sm'}`}>
                     <div className="flex items-start gap-2">
                       <Textarea
                         value={task.description}
-                        onChange={(e) => handleTaskChange(index, "description", e.target.value)}
-                        placeholder={`Task ${index + 1} description`}
+                        onChange={(e) => handleTaskChange(task.tempId, "description", e.target.value)}
+                        placeholder={`Task description`}
                         className={`flex-grow ${task.isDeleted && !task.isNew ? 'line-through' : ''}`}
                         rows={2}
                         disabled={task.isDeleted && !task.isNew}
                       />
-                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(index)} title={task.isDeleted && !task.isNew ? "Undo Remove" : "Remove Task"}>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(task.tempId)} title={task.isDeleted && !task.isNew ? "Undo Remove" : "Remove Task"}>
                         {task.isDeleted && !task.isNew ? <PlusCircle className="h-4 w-4 text-green-600" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                       </Button>
                     </div>
                      <Select
                         value={task.assigneeId || "unassigned"}
-                        onValueChange={(value: string) => handleTaskChange(index, "assigneeId", value === "unassigned" ? undefined : value)}
+                        onValueChange={(value: string) => handleTaskChange(task.tempId, "assigneeId", value)}
                         disabled={isLoadingMembers || (task.isDeleted && !task.isNew)}
                       >
                       <SelectTrigger className="mt-1">
@@ -301,10 +328,10 @@ export const ObjectiveDialog = ({
                       </SelectContent>
                     </Select>
                   </div>
-                  ) : null 
+                  )
                 ))}
-                 {tasks.filter(t => !t.isDeleted || (t.isDeleted && isEditMode && !t.isNew)).length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-3">No tasks added yet.</p>
+                 {tasks.filter(t => !t.isDeleted || (t.isDeleted && !t.isNew)).length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-3">No tasks added yet. Click "Add Task" below.</p>
                 )}
               </div>
               <Button type="button" variant="outline" size="sm" onClick={handleAddTask} className="mt-3">
