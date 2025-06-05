@@ -67,7 +67,6 @@ export const ObjectiveDialog = ({
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
     }
-    // Fallback UUID generator
     let d = new Date().getTime();
     if (typeof performance !== 'undefined' && typeof performance.now === 'function'){
       d += performance.now(); 
@@ -79,9 +78,9 @@ export const ObjectiveDialog = ({
     });
   }, []);
 
-  const parseDate = (dateInput: Date | string | undefined): Date | undefined => {
+  const parseAndValidateDate = (dateInput: Date | string | undefined): Date | undefined => {
     if (!dateInput) return undefined;
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    const date = new Date(dateInput);
     return isValid(date) ? date : undefined;
   };
 
@@ -95,8 +94,8 @@ export const ObjectiveDialog = ({
           id: task.id,
           description: task.description,
           assigneeId: task.assigneeId || undefined,
-          startDate: parseDate(task.startDate),
-          dueDate: parseDate(task.dueDate),
+          startDate: parseAndValidateDate(task.startDate),
+          dueDate: parseAndValidateDate(task.dueDate),
           isNew: false,
           isDeleted: false,
         }))
@@ -205,7 +204,6 @@ export const ObjectiveDialog = ({
     const tasksWithEmptyDescriptions = activeTasks.filter(task => !task.description.trim());
 
     if (tasksWithEmptyDescriptions.length > 0) {
-        // Allow submission if ALL tasks with empty descriptions are ALSO new AND have no assignee/dates
         const allProblemTasksAreTrulyEmptyAndNew = tasksWithEmptyDescriptions.every(
             task => task.isNew && !task.assigneeId && !task.startDate && !task.dueDate
         );
@@ -230,8 +228,8 @@ export const ObjectiveDialog = ({
           .map(t => ({ 
             description: t.description, 
             assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId,
-            startDate: t.startDate || undefined, // Pass Date object or undefined
-            dueDate: t.dueDate || undefined,     // Pass Date object or undefined
+            startDate: t.startDate || null, // Send Date object or null
+            dueDate: t.dueDate || null,     // Send Date object or null
            }));
         
         const tasksToDeleteIds = tasks
@@ -241,8 +239,6 @@ export const ObjectiveDialog = ({
         const tasksToUpdateData = tasks
           .filter(t => !t.isNew && !t.isDeleted && t.id)
           .map(t => {
-            // For tasksToUpdate, we send the current values. The action will compare.
-            // Send null if date is undefined in dialog state to indicate clearing
             return {
                 id: t.id!,
                 description: t.description,
@@ -266,8 +262,8 @@ export const ObjectiveDialog = ({
           .map(t => ({ 
             description: t.description, 
             assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId,
-            startDate: t.startDate || undefined,
-            dueDate: t.dueDate || undefined,
+            startDate: t.startDate || undefined, // For new tasks, undefined is fine if not set
+            dueDate: t.dueDate || undefined,   // For new tasks, undefined is fine if not set
           }));
 
         result = await addObjectiveAction(
@@ -455,3 +451,5 @@ export const ObjectiveDialog = ({
     </Dialog>
   );
 };
+
+    

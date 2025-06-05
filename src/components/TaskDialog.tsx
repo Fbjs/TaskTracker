@@ -52,9 +52,9 @@ export const TaskDialog = ({
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const { toast } = useToast();
 
-  const parseDate = (dateInput: Date | string | undefined): Date | undefined => {
+  const parseAndValidateDate = (dateInput: Date | string | undefined): Date | undefined => {
     if (!dateInput) return undefined;
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    const date = new Date(dateInput);
     return isValid(date) ? date : undefined;
   };
 
@@ -63,8 +63,8 @@ export const TaskDialog = ({
       setDescription(task.description);
       setStatus(task.status);
       setPriority(task.priority);
-      setStartDate(parseDate(task.startDate));
-      setDueDate(parseDate(task.dueDate));
+      setStartDate(parseAndValidateDate(task.startDate));
+      setDueDate(parseAndValidateDate(task.dueDate));
       setAssigneeId(task.assigneeId || undefined);
       setIsSubmitting(false);
     }
@@ -98,20 +98,15 @@ export const TaskDialog = ({
 
     setIsSubmitting(true);
     try {
-      // Only include fields in the update payload if they have changed or are being explicitly set/cleared.
-      // The server action will compare with current DB values.
       const updates: Partial<Omit<Task, 'id' | 'objectiveId' | 'createdAt' | 'assignee'>> & { assigneeId?: string | null } = {};
 
-      // Always send description, status, priority as they are core fields
       updates.description = description;
       updates.status = status;
       updates.priority = priority;
       
-      // For optional fields, send them if they are set (Date object) or explicitly cleared (null)
-      // The server action is now responsible for comparing with the existing value in DB
-      updates.startDate = startDate || null;
-      updates.dueDate = dueDate || null;
-      updates.assigneeId = assigneeId || null;
+      updates.startDate = startDate || null; // Send Date object or null
+      updates.dueDate = dueDate || null;   // Send Date object or null
+      updates.assigneeId = assigneeId || null; // Send string or null
       
       const result = await updateTaskAction(task.id, objectiveId, updates);
       if ("error" in result) {
@@ -202,7 +197,7 @@ export const TaskDialog = ({
                     <Calendar
                       mode="single"
                       selected={startDate}
-                      onSelect={(date) => setStartDate(date || undefined)} // Ensure undefined if cleared
+                      onSelect={(date) => setStartDate(date || undefined)} 
                       initialFocus
                     />
                   </PopoverContent>
@@ -225,7 +220,7 @@ export const TaskDialog = ({
                     <Calendar
                       mode="single"
                       selected={dueDate}
-                      onSelect={(date) => setDueDate(date || undefined)} // Ensure undefined if cleared
+                      onSelect={(date) => setDueDate(date || undefined)} 
                       initialFocus
                       disabled={startDate && isValid(startDate) ? { before: startDate } : undefined} 
                     />
@@ -266,3 +261,5 @@ export const TaskDialog = ({
     </Dialog>
   );
 };
+
+    
