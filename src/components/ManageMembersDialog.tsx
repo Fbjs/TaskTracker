@@ -17,7 +17,18 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, UserPlus, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { addMemberToWorkspaceAction, getWorkspaceMembersAction } from "@/app/actions"; 
+import { addMemberToWorkspaceAction, getWorkspaceMembersAction, removeMemberFromWorkspaceAction } from "@/app/actions"; 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ManageMembersDialogProps {
   isOpen: boolean;
@@ -38,6 +49,7 @@ export const ManageMembersDialog = ({
   const [members, setMembers] = useState<User[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRemovingMember, setIsRemovingMember] = useState<string | null>(null); // Store ID of member being removed
   const { toast } = useToast();
 
   const isOwner = workspace.ownerId === currentUserId;
@@ -88,14 +100,26 @@ export const ManageMembersDialog = ({
     }
   };
 
-  // Placeholder for remove member functionality
-  const handleRemoveMember = async (memberIdToRemove: string) => {
-     toast({ title: "Info", description: "Remove member functionality not yet implemented in this dialog.", variant: "default"});
-    // TODO: Implement removeMemberFromWorkspaceAction and call it here
-    // Example:
-    // if (!isOwner) { ... return; }
-    // const result = await removeMemberFromWorkspaceAction(workspace.id, memberIdToRemove, currentUserId);
-    // ... handle result, refresh list ...
+  const handleConfirmRemoveMember = async (memberIdToRemove: string) => {
+    if (!isOwner) {
+      toast({ title: "Permission Denied", description: "Only the workspace owner can remove members.", variant: "destructive" });
+      return;
+    }
+    setIsRemovingMember(memberIdToRemove);
+    try {
+      const result = await removeMemberFromWorkspaceAction(workspace.id, memberIdToRemove, currentUserId);
+      if ("error" in result) {
+        toast({ title: "Error Removing Member", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Member Removed", description: `Member removed successfully.` });
+        onMembersChanged(result); // Notify parent of change
+        fetchMembers(); // Refresh member list
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: `Failed to remove member. ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsRemovingMember(null);
+    }
   };
 
 
@@ -123,7 +147,7 @@ export const ManageMembersDialog = ({
                   required
                   disabled={isSubmitting}
                 />
-                <Button type="submit" size="icon" disabled={isSubmitting || !memberEmail.trim()}>
+                <Button type="submit" size="icon" disabled={isSubmitting || !memberEmail.trim() || isRemovingMember !== null}>
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                 </Button>
               </div>
@@ -144,9 +168,34 @@ export const ManageMembersDialog = ({
                   <li key={member.id} className="flex justify-between items-center text-sm p-1.5 hover:bg-muted/50 rounded">
                     <span>{member.email} {member.id === workspace.ownerId && "(Owner)"}</span>
                     {isOwner && member.id !== workspace.ownerId && (
-                       <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => handleRemoveMember(member.id)} title="Remove member (not implemented)">
-                         <XCircle className="h-4 w-4" />
-                       </Button>
+                       <AlertDialog>
+                         <AlertDialogTrigger asChild>
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-destructive hover:text-destructive" 
+                                title="Remove member"
+                                disabled={isRemovingMember === member.id}
+                            >
+                              {isRemovingMember === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                            </Button>
+                         </AlertDialogTrigger>
+                         <AlertDialogContent>
+                           <AlertDialogHeader>
+                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                             <AlertDialogDescription>
+                               This action will remove {member.email} from the workspace. They will lose access to its objectives and tasks. Any tasks currently assigned to them will be unassigned. This cannot be undone.
+                             </AlertDialogDescription>
+                           </AlertDialogHeader>
+                           <AlertDialogFooter>
+                             <AlertDialogCancel disabled={isRemovingMember === member.id}>Cancel</AlertDialogCancel>
+                             <AlertDialogAction onClick={() => handleConfirmRemoveMember(member.id)} disabled={isRemovingMember === member.id}>
+                               {isRemovingMember === member.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                               Confirm Remove
+                             </AlertDialogAction>
+                           </AlertDialogFooter>
+                         </AlertDialogContent>
+                       </AlertDialog>
                     )}
                   </li>
                 ))}
@@ -158,7 +207,7 @@ export const ManageMembersDialog = ({
         </div>
 
         <DialogFooter className="mt-4">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isRemovingMember !== null || isSubmitting}>
             Close
           </Button>
         </DialogFooter>
@@ -166,3 +215,4 @@ export const ManageMembersDialog = ({
     </Dialog>
   );
 };
+

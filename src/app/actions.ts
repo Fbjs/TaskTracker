@@ -221,7 +221,7 @@ export async function addMemberToWorkspaceAction(workspaceId: string, memberEmai
       return { error: "Only the workspace owner can add members." };
     }
 
-    const memberToAdd = await UserCollection.findOne({ email: memberEmail.toLowerCase() });
+    const memberToAdd = await UserCollection.findOne({ email: memberEmail.toLowerCase() }).select('_id email');
     if (!memberToAdd) {
       return { error: `User with email ${memberEmail} not found.` };
     }
@@ -240,13 +240,61 @@ export async function addMemberToWorkspaceAction(workspaceId: string, memberEmai
   }
 }
 
+export async function removeMemberFromWorkspaceAction(workspaceId: string, memberIdToRemove: string, currentUserId: string): Promise<Workspace | { error: string }> {
+  await dbConnect();
+  if (!workspaceId || !memberIdToRemove || !currentUserId) {
+    return { error: "Workspace ID, member ID to remove, and current user ID are required." };
+  }
+
+  try {
+    const workspace = await WorkspaceCollection.findById(workspaceId);
+    if (!workspace) {
+      return { error: "Workspace not found." };
+    }
+
+    if (workspace.ownerId.toString() !== currentUserId) {
+      return { error: "Only the workspace owner can remove members." };
+    }
+
+    if (workspace.ownerId.toString() === memberIdToRemove) {
+      return { error: "The workspace owner cannot be removed." };
+    }
+
+    const memberExists = workspace.memberIds.map(id => id.toString()).includes(memberIdToRemove);
+    if (!memberExists) {
+      return { error: "User is not a member of this workspace or already removed." };
+    }
+
+    workspace.memberIds = workspace.memberIds.filter(id => id.toString() !== memberIdToRemove);
+    await workspace.save();
+
+    // Unassign tasks from the removed member within this workspace's objectives
+    const objectivesInWorkspace = await ObjectiveCollection.find({ workspaceId: workspace._id });
+    const objectiveIds = objectivesInWorkspace.map(obj => obj._id);
+
+    await TaskCollection.updateMany(
+      { objectiveId: { $in: objectiveIds }, assigneeId: new mongoose.Types.ObjectId(memberIdToRemove) },
+      { $unset: { assigneeId: "" } } // Unassign by removing the assigneeId field
+    );
+    
+    revalidatePath("/");
+    return serializeDocument<IWorkspace>(workspace) as Workspace;
+  } catch (error: any) {
+    console.error("Error removing member from workspace:", error);
+    return { error: "Failed to remove member. " + error.message };
+  }
+}
+
 export async function getWorkspaceMembersAction(workspaceId: string): Promise<User[] | { error: string }> {
   await dbConnect();
   if (!workspaceId) {
     return { error: "Workspace ID is required." };
   }
   try {
-    const workspace = await WorkspaceCollection.findById(workspaceId).populate<{ memberIds: IUser[] }>('memberIds', 'email _id').lean();
+    const workspace = await WorkspaceCollection.findById(workspaceId).populate<{ memberIds: IUser[] }>({
+        path: 'memberIds',
+        select: 'email _id' // Explicitly select only email and _id, excluding password
+    }).lean();
     if (!workspace) {
       return { error: "Workspace not found." };
     }
@@ -285,7 +333,7 @@ export async function addObjectiveAction(
   }
 
   try {
-    // Validate workspace and user membership (optional, but good practice)
+    // Validate workspace and user membership
     const workspace = await WorkspaceCollection.findById(workspaceId);
     if (!workspace) return { error: "Workspace not found." };
     if (!workspace.memberIds.map(id => id.toString()).includes(userId)) {
@@ -303,14 +351,19 @@ export async function addObjectiveAction(
     if (tasksData.length > 0) {
         const tasksToInsert = tasksData
             .filter(td => td.description.trim() !== "")
-            .map(taskInput => ({
-                description: taskInput.description,
-                assigneeId: taskInput.assigneeId ? new mongoose.Types.ObjectId(taskInput.assigneeId) : undefined,
-                status: "To Do" as TaskStatus,
-                priority: "Medium" as TaskPriority,
-                objectiveId: newObjectiveDoc._id, 
-                createdAt: new Date(), 
-        }));
+            .map(taskInput => {
+                if (taskInput.assigneeId && !workspace.memberIds.map(id => id.toString()).includes(taskInput.assigneeId)) {
+                    throw new Error(`Assignee with ID ${taskInput.assigneeId} is not a member of this workspace.`);
+                }
+                return {
+                    description: taskInput.description,
+                    assigneeId: taskInput.assigneeId ? new mongoose.Types.ObjectId(taskInput.assigneeId) : undefined,
+                    status: "To Do" as TaskStatus,
+                    priority: "Medium" as TaskPriority,
+                    objectiveId: newObjectiveDoc._id, 
+                    createdAt: new Date(), 
+                }
+            });
         
         if (tasksToInsert.length > 0) {
             const createdTasks = await TaskCollection.insertMany(tasksToInsert);
@@ -409,17 +462,26 @@ export async function updateTaskAction(
     (validUpdates as any).assigneeId = undefined; // Unassign
   } else if (validUpdates.assigneeId) {
      // Validate assigneeId is a member of the workspace
-     const taskDoc = await TaskCollection.findById(taskId).populate('objectiveId');
+     const taskDoc = await TaskCollection.findById(taskId).populate<{ objectiveId: IObjective }>('objectiveId');
      if (taskDoc && taskDoc.objectiveId) {
-         const objective = await ObjectiveCollection.findById(taskDoc.objectiveId).populate('workspaceId');
-         if (objective && objective.workspaceId && (objective.workspaceId as unknown as IWorkspace).memberIds) {
-             const workspace = objective.workspaceId as unknown as IWorkspace;
+         // We need to ensure objectiveId is populated enough to get workspaceId,
+         // or fetch the workspace directly if objectiveId itself is just an ID.
+         let workspace: IWorkspace | null = null;
+         if ((taskDoc.objectiveId as IObjective).workspaceId) { // if objectiveId is populated with workspaceId field
+            if (typeof (taskDoc.objectiveId as IObjective).workspaceId === 'string' || ((taskDoc.objectiveId as IObjective).workspaceId as any instanceof mongoose.Types.ObjectId)) {
+                workspace = await WorkspaceCollection.findById((taskDoc.objectiveId as IObjective).workspaceId);
+            } else { // if workspaceId is already populated object
+                workspace = (taskDoc.objectiveId as IObjective).workspaceId as IWorkspace;
+            }
+         }
+
+         if (workspace && workspace.memberIds) {
              if (!workspace.memberIds.map(id => id.toString()).includes(validUpdates.assigneeId)) {
                  return { error: "Assignee is not a member of this workspace." };
              }
              (validUpdates as any).assigneeId = new mongoose.Types.ObjectId(validUpdates.assigneeId);
          } else {
-            return { error: "Could not verify workspace membership for assignee."};
+            return { error: "Could not verify workspace membership for assignee. Workspace details missing."};
          }
      } else {
         return { error: "Could not find task or objective to verify assignee."};
@@ -446,3 +508,4 @@ export async function updateTaskAction(
     return { error: "Failed to update task. " + error.message };
   }
 }
+
