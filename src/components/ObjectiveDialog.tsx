@@ -31,12 +31,12 @@ interface ObjectiveDialogProps {
 }
 
 interface EditableTask {
-  tempId: string; // Stable temporary ID for React keys
-  id?: string; // Real DB ID, present for existing tasks
+  tempId: string; 
+  id?: string; 
   description: string;
   assigneeId?: string;
-  isNew?: boolean; // True if added in this dialog session or loaded as new
-  isDeleted?: boolean; // True if marked for deletion
+  isNew?: boolean; 
+  isDeleted?: boolean; 
 }
 
 export const ObjectiveDialog = ({
@@ -58,14 +58,29 @@ export const ObjectiveDialog = ({
 
   const isEditMode = !!objectiveToEdit;
 
-  const generateTempId = () => crypto.randomUUID();
+  const generateTempId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    // Fallback for environments where crypto.randomUUID is not available
+    // or crypto itself is not defined (e.g. very old Node or specific JS engines)
+    let d = new Date().getTime();
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function'){
+      d += performance.now(); //use high-precision timer if available
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = (d + Math.random()*16)%16 | 0;
+      d = Math.floor(d/16);
+      return (c === 'x' ? r : (r&0x3|0x8)).toString(16);
+    });
+  };
 
   const resetDialogState = useCallback(() => {
     if (isEditMode && objectiveToEdit) {
       setObjectiveDescription(objectiveToEdit.description);
       setTasks(
         objectiveToEdit.tasks.map((task: TaskType) => ({
-          tempId: generateTempId(), // Assign tempId for existing tasks too for consistent key usage
+          tempId: generateTempId(),
           id: task.id,
           description: task.description,
           assigneeId: task.assigneeId || undefined,
@@ -154,9 +169,9 @@ export const ObjectiveDialog = ({
       const taskToRemove = currentTasks.find(t => t.tempId === taskTempId);
       if (!taskToRemove) return currentTasks;
 
-      if (taskToRemove.isNew) { // If it's a task added in this dialog session, remove it entirely
+      if (taskToRemove.isNew) { 
         return currentTasks.filter(t => t.tempId !== taskTempId);
-      } else { // If it's an existing task, mark/unmark for deletion
+      } else { 
         return currentTasks.map(t =>
           t.tempId === taskTempId ? { ...t, isDeleted: !t.isDeleted } : t
         );
@@ -175,7 +190,7 @@ export const ObjectiveDialog = ({
     if (activeTasks.length > 0 && activeTasks.some(task => !task.description.trim())) {
       const allEmptyAndNew = activeTasks.every(task => !task.description.trim() && task.isNew && !task.assigneeId);
       if (activeTasks.length === 1 && allEmptyAndNew) {
-        // Allow submitting with a single, untouched, new, empty task (it will be filtered out)
+        // Allow submitting with a single, untouched, new, empty task (it will be filtered out by the backend logic too)
       } else {
         toast({ title: "Validation Error", description: "All active task descriptions must be filled.", variant: "destructive" });
         return;
@@ -200,14 +215,14 @@ export const ObjectiveDialog = ({
           .map(t => t.id!);
         
         const tasksToUpdateData = tasks
-          .filter(t => !t.isNew && !t.isDeleted && t.id && ( // Check if existing task fields changed
+          .filter(t => !t.isNew && !t.isDeleted && t.id && (
             t.description !== objectiveToEdit.tasks.find(ot => ot.id === t.id)?.description ||
             (t.assigneeId || undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.assigneeId || undefined)
           ))
           .map(t => ({
             id: t.id!,
             description: t.description,
-            assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId
+            assigneeId: t.assigneeId === "unassigned" ? null : (t.assigneeId || undefined) 
           }));
 
         result = await updateObjectiveAction(
@@ -215,7 +230,7 @@ export const ObjectiveDialog = ({
             objectiveDescription,
             newTasksData,
             tasksToDeleteIds,
-            tasksToUpdateData // Pass tasks to update
+            tasksToUpdateData 
         );
 
       } else { 
@@ -297,14 +312,17 @@ export const ObjectiveDialog = ({
               <Label className="font-semibold">Tasks</Label>
               <div className="mt-1 max-h-[250px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10">
                 {tasks.map((task) => (
-                  (!task.isDeleted || (task.isDeleted && !task.isNew)) && ( // Show existing tasks marked for deletion, hide new tasks marked for deletion
-                  <div key={task.tempId} className={`p-3 border rounded-md space-y-2 ${task.isDeleted && !task.isNew ? 'bg-red-100/50 dark:bg-red-900/20 opacity-70' : 'bg-background shadow-sm'}`}>
+                  (!task.isDeleted || (task.isDeleted && !task.isNew)) && ( 
+                  <div 
+                    key={task.tempId} 
+                    className={`p-3 border rounded-md space-y-2 ${task.isDeleted && !task.isNew ? 'bg-red-100/50 dark:bg-red-900/20 opacity-70 line-through' : 'bg-background shadow-sm'}`}
+                  >
                     <div className="flex items-start gap-2">
                       <Textarea
                         value={task.description}
                         onChange={(e) => handleTaskChange(task.tempId, "description", e.target.value)}
                         placeholder={`Task description`}
-                        className={`flex-grow ${task.isDeleted && !task.isNew ? 'line-through' : ''}`}
+                        className={`flex-grow`}
                         rows={2}
                         disabled={task.isDeleted && !task.isNew}
                       />
@@ -353,3 +371,5 @@ export const ObjectiveDialog = ({
     </Dialog>
   );
 };
+
+    
