@@ -31,7 +31,7 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
     <div className="space-y-8">
       {objectives.map((objective) => {
         const tasksWithDates = objective.tasks.filter(task => {
-          const start = getValidDate(task.startDate || task.createdAt); // Use startDate first, then createdAt
+          const start = getValidDate(task.startDate || task.createdAt);
           const end = getValidDate(task.dueDate);
           return start && end && startOfDay(end).getTime() >= startOfDay(start).getTime();
         });
@@ -52,24 +52,22 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
         const allTaskStartDates = tasksWithDates.map(t => startOfDay(getValidDate(t.startDate || t.createdAt)!));
         const allTaskEndDates = tasksWithDates.map(t => startOfDay(getValidDate(t.dueDate)!));
 
-        const overallMinDate = new Date(Math.min(...allTaskStartDates.map(d => d.getTime())));
-        let tempOverallMaxDate = new Date(Math.max(...allTaskEndDates.map(d => d.getTime())));
+        const overallMinDate = startOfDay(new Date(Math.min(...allTaskStartDates.map(d => d.getTime()))));
+        let tempOverallMaxDate = startOfDay(new Date(Math.max(...allTaskEndDates.map(d => d.getTime()))));
         
         if (isValid(overallMinDate) && isValid(tempOverallMaxDate) && tempOverallMaxDate.getTime() < overallMinDate.getTime()) {
             tempOverallMaxDate = overallMinDate;
         }
-         // Ensure the range is at least one day for the header
         if (isValid(overallMinDate) && isValid(tempOverallMaxDate) && differenceInDays(tempOverallMaxDate, overallMinDate) < 0) {
-             tempOverallMaxDate = overallMinDate; // or addDays(overallMinDate, 1) if you want at least 2 days
+             tempOverallMaxDate = overallMinDate; 
         }
 
         const overallMaxDate = tempOverallMaxDate;
 
         let chartDays: Date[] = [];
         if (isValid(overallMinDate) && isValid(overallMaxDate) && overallMaxDate.getTime() >= overallMinDate.getTime()) {
-           chartDays = eachDayOfInterval({ start: overallMinDate, end: overallMaxDate });
+           chartDays = eachDayOfInterval({ start: overallMinDate, end: addDays(overallMaxDate, 0) }); // Use addDays(overallMaxDate, 0) to include the last day
         } else {
-           // Fallback if range is still invalid (e.g., only one date or error)
            if (isValid(overallMinDate)) chartDays = [overallMinDate];
            else return (
                 <Card key={objective.id} className="shadow-lg">
@@ -114,11 +112,12 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                     const validatedTaskEnd = taskEnd.getTime() < taskStart.getTime() ? taskStart : taskEnd;
 
                     const startDayIndex = differenceInDays(taskStart, overallMinDate);
-                    const durationDays = Math.max(1, differenceInDays(validatedTaskEnd, taskStart) + 1); // Ensure duration is at least 1 day
+                    const durationDays = Math.max(1, differenceInDays(validatedTaskEnd, taskStart) + 1); 
 
                     const barOffset = startDayIndex * DAY_WIDTH;
-                    const barWidth = durationDays * DAY_WIDTH;
-
+                    // Adjust barWidth to be 1px less to fit before the right border of the last cell
+                    const calculatedBarWidth = (durationDays * DAY_WIDTH) - 1;
+                    const barWidth = Math.max(0, calculatedBarWidth); // Ensure width is not negative
 
                     const priorityColor = PRIORITY_COLORS[task.priority] || 'bg-gray-400';
 
@@ -133,7 +132,6 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                             style={{
                               left: `${barOffset}px`,
                               width: `${barWidth}px`,
-                              minWidth: `${DAY_WIDTH}px` // Ensure single-day tasks are visible
                             }}
                             title={`${task.description} (${format(taskStartRaw, 'MMM d')} - ${format(taskEndRaw, 'MMM d')})`}
                           >
