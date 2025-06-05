@@ -34,11 +34,22 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
   if (plainObject.updatedAt && !(plainObject.updatedAt instanceof Date)) {
     plainObject.updatedAt = new Date(plainObject.updatedAt);
   }
+  
   if (plainObject.startDate && !(plainObject.startDate instanceof Date)) {
-    plainObject.startDate = new Date(plainObject.startDate);
+    const parsedStartDate = new Date(plainObject.startDate);
+    if (isValid(parsedStartDate)) {
+        plainObject.startDate = parsedStartDate;
+    } else {
+        delete plainObject.startDate; // Remove if invalid after parsing
+    }
   }
   if (plainObject.dueDate && !(plainObject.dueDate instanceof Date)) {
-    plainObject.dueDate = new Date(plainObject.dueDate);
+    const parsedDueDate = new Date(plainObject.dueDate);
+    if (isValid(parsedDueDate)) {
+        plainObject.dueDate = parsedDueDate;
+    } else {
+        delete plainObject.dueDate; // Remove if invalid after parsing
+    }
   }
 
 
@@ -358,11 +369,28 @@ export async function addObjectiveAction(
                 if (taskInput.assigneeId && !workspace.memberIds.map(id => id.toString()).includes(taskInput.assigneeId)) {
                     throw new Error(`Assignee with ID ${taskInput.assigneeId} is not a member of this workspace.`);
                 }
+
+                let effectiveStartDate: Date | undefined = undefined;
+                if (taskInput.startDate) {
+                    const dateToTest = taskInput.startDate instanceof Date ? taskInput.startDate : new Date(taskInput.startDate);
+                    if (isValid(dateToTest)) {
+                        effectiveStartDate = dateToTest;
+                    }
+                }
+
+                let effectiveDueDate: Date | undefined = undefined;
+                if (taskInput.dueDate) {
+                    const dateToTest = taskInput.dueDate instanceof Date ? taskInput.dueDate : new Date(taskInput.dueDate);
+                    if (isValid(dateToTest)) {
+                        effectiveDueDate = dateToTest;
+                    }
+                }
+                
                 return {
                     description: taskInput.description,
                     assigneeId: taskInput.assigneeId ? new mongoose.Types.ObjectId(taskInput.assigneeId) : undefined,
-                    startDate: taskInput.startDate && isValid(new Date(taskInput.startDate)) ? new Date(taskInput.startDate) : undefined,
-                    dueDate: taskInput.dueDate && isValid(new Date(taskInput.dueDate)) ? new Date(taskInput.dueDate) : undefined,
+                    startDate: effectiveStartDate,
+                    dueDate: effectiveDueDate,
                     status: "To Do" as TaskStatus,
                     priority: "Medium" as TaskPriority,
                     objectiveId: newObjectiveDoc!._id,
@@ -394,7 +422,7 @@ export async function addObjectiveAction(
     return serializeDocument<IObjective>(populatedObjectiveDoc) as Objective;
 
   } catch (error: any) {
-     if (newObjectiveDoc && !newObjectiveDoc.isNew) {
+     if (newObjectiveDoc && !newObjectiveDoc.isNew) { // Check if it was ever saved
         const fallbackObjective = await ObjectiveCollection.findById(newObjectiveDoc._id)
           .populate<{ tasks: ITask[] }>({
               path: 'tasks',
@@ -435,53 +463,71 @@ export async function updateObjectiveAction(
 
     if (tasksToUpdateData.length > 0) {
       for (const taskUpdate of tasksToUpdateData) {
-        const taskDoc = await TaskCollection.findById(taskUpdate.id);
-        if (!taskDoc || taskDoc.objectiveId.toString() !== objectiveId) continue;
+        const taskDocToUpdate = await TaskCollection.findById(taskUpdate.id);
+        if (!taskDocToUpdate || taskDocToUpdate.objectiveId.toString() !== objectiveId) continue;
 
         const updateQuery: { $set: any, $unset: any } = { $set: {}, $unset: {} };
         let changed = false;
 
-        if (Object.prototype.hasOwnProperty.call(taskUpdate, 'description') && taskUpdate.description !== undefined && taskUpdate.description !== taskDoc.description) {
+        if (Object.prototype.hasOwnProperty.call(taskUpdate, 'description') && taskUpdate.description !== undefined && taskUpdate.description !== taskDocToUpdate.description) {
           updateQuery.$set.description = taskUpdate.description;
           changed = true;
         }
         
+        // Handle startDate for update
         if (Object.prototype.hasOwnProperty.call(taskUpdate, 'startDate')) {
-          const newStartDateVal = taskUpdate.startDate ? new Date(taskUpdate.startDate) : null;
-          if (newStartDateVal && isValid(newStartDateVal)) {
-             if (!taskDoc.startDate || newStartDateVal.getTime() !== new Date(taskDoc.startDate).getTime()) {
-                updateQuery.$set.startDate = newStartDateVal;
-                changed = true;
-             }
-          } else if (newStartDateVal === null && taskDoc.startDate) {
-             updateQuery.$unset.startDate = "";
-             changed = true;
-          }
+            const clientStartDate = taskUpdate.startDate;
+            let newStartDateToSet: Date | null = null;
+
+            if (clientStartDate === null) { // Explicitly clear
+                if (taskDocToUpdate.startDate) {
+                    updateQuery.$unset.startDate = "";
+                    changed = true;
+                }
+            } else if (clientStartDate) { // Attempt to set/update
+                const parsedDate = clientStartDate instanceof Date ? clientStartDate : new Date(clientStartDate);
+                if (isValid(parsedDate)) {
+                    newStartDateToSet = parsedDate;
+                    if (!taskDocToUpdate.startDate || new Date(taskDocToUpdate.startDate).getTime() !== newStartDateToSet.getTime()) {
+                        updateQuery.$set.startDate = newStartDateToSet;
+                        changed = true;
+                    }
+                }
+            }
         }
 
+        // Handle dueDate for update
         if (Object.prototype.hasOwnProperty.call(taskUpdate, 'dueDate')) {
-          const newDueDateVal = taskUpdate.dueDate ? new Date(taskUpdate.dueDate) : null;
-           if (newDueDateVal && isValid(newDueDateVal)) {
-             if (!taskDoc.dueDate || newDueDateVal.getTime() !== new Date(taskDoc.dueDate).getTime()) {
-                updateQuery.$set.dueDate = newDueDateVal;
-                changed = true;
-             }
-          } else if (newDueDateVal === null && taskDoc.dueDate) {
-             updateQuery.$unset.dueDate = "";
-             changed = true;
-          }
+            const clientDueDate = taskUpdate.dueDate;
+            let newDueDateToSet: Date | null = null;
+
+            if (clientDueDate === null) { // Explicitly clear
+                if (taskDocToUpdate.dueDate) {
+                    updateQuery.$unset.dueDate = "";
+                    changed = true;
+                }
+            } else if (clientDueDate) { // Attempt to set/update
+                const parsedDate = clientDueDate instanceof Date ? clientDueDate : new Date(clientDueDate);
+                if (isValid(parsedDate)) {
+                    newDueDateToSet = parsedDate;
+                     if (!taskDocToUpdate.dueDate || new Date(taskDocToUpdate.dueDate).getTime() !== newDueDateToSet.getTime()) {
+                        updateQuery.$set.dueDate = newDueDateToSet;
+                        changed = true;
+                    }
+                }
+            }
         }
         
         if (Object.prototype.hasOwnProperty.call(taskUpdate, 'assigneeId')) {
-           const currentAssigneeId = taskDoc.assigneeId ? taskDoc.assigneeId.toString() : null;
+           const currentAssigneeId = taskDocToUpdate.assigneeId ? taskDocToUpdate.assigneeId.toString() : null;
            const newAssigneeId = taskUpdate.assigneeId;
 
-           if (newAssigneeId === null && currentAssigneeId !== null) {
+           if ((newAssigneeId === null || newAssigneeId === undefined) && currentAssigneeId !== null) {
              updateQuery.$unset.assigneeId = "";
              changed = true;
            } else if (newAssigneeId && newAssigneeId !== "" && newAssigneeId !== currentAssigneeId) {
              if (!workspace.memberIds.map(id => id.toString()).includes(newAssigneeId)) {
-                throw new Error(`Cannot assign task ${taskUpdate.description || taskDoc.description}: User ${newAssigneeId} is not a member of the workspace.`);
+                throw new Error(`Cannot assign task ${taskUpdate.description || taskDocToUpdate.description}: User ${newAssigneeId} is not a member of the workspace.`);
              }
              updateQuery.$set.assigneeId = new mongoose.Types.ObjectId(newAssigneeId);
              changed = true;
@@ -504,11 +550,28 @@ export async function updateObjectiveAction(
                 if (taskInput.assigneeId && !workspace.memberIds.map(id => id.toString()).includes(taskInput.assigneeId)) {
                     throw new Error(`Cannot create task ${taskInput.description}: User ${taskInput.assigneeId} is not a member of the workspace.`);
                 }
+                
+                let effectiveStartDate: Date | undefined = undefined;
+                if (taskInput.startDate) {
+                    const dateToTest = taskInput.startDate instanceof Date ? taskInput.startDate : new Date(taskInput.startDate);
+                    if (isValid(dateToTest)) {
+                        effectiveStartDate = dateToTest;
+                    }
+                }
+
+                let effectiveDueDate: Date | undefined = undefined;
+                if (taskInput.dueDate) {
+                    const dateToTest = taskInput.dueDate instanceof Date ? taskInput.dueDate : new Date(taskInput.dueDate);
+                    if (isValid(dateToTest)) {
+                        effectiveDueDate = dateToTest;
+                    }
+                }
+
                 return {
                     description: taskInput.description,
                     assigneeId: taskInput.assigneeId ? new mongoose.Types.ObjectId(taskInput.assigneeId) : undefined,
-                    startDate: taskInput.startDate && isValid(new Date(taskInput.startDate)) ? new Date(taskInput.startDate) : undefined,
-                    dueDate: taskInput.dueDate && isValid(new Date(taskInput.dueDate)) ? new Date(taskInput.dueDate) : undefined,
+                    startDate: effectiveStartDate,
+                    dueDate: effectiveDueDate,
                     status: "To Do" as TaskStatus,
                     priority: "Medium" as TaskPriority,
                     objectiveId: objective._id,
@@ -580,71 +643,67 @@ export async function updateTaskAction(
   const updatePayload: { $set: any, $unset: any } = { $set: {}, $unset: {} };
   let changedFields = 0;
 
-  // Description, Status, Priority
-  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'description') && rawUpdates.description !== undefined && rawUpdates.description !== taskToUpdate.description) {
+  // Description, Status, Priority (Directly set if provided and different)
+  if (rawUpdates.hasOwnProperty('description') && rawUpdates.description !== undefined && rawUpdates.description !== taskToUpdate.description) {
     updatePayload.$set.description = rawUpdates.description;
     changedFields++;
   }
-  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'status') && rawUpdates.status !== undefined && rawUpdates.status !== taskToUpdate.status) {
+  if (rawUpdates.hasOwnProperty('status') && rawUpdates.status !== undefined && rawUpdates.status !== taskToUpdate.status) {
     updatePayload.$set.status = rawUpdates.status;
     changedFields++;
   }
-  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'priority') && rawUpdates.priority !== undefined && rawUpdates.priority !== taskToUpdate.priority) {
+  if (rawUpdates.hasOwnProperty('priority') && rawUpdates.priority !== undefined && rawUpdates.priority !== taskToUpdate.priority) {
     updatePayload.$set.priority = rawUpdates.priority;
     changedFields++;
   }
 
   // StartDate
-  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'startDate')) {
-    const clientStartDate = rawUpdates.startDate; // This could be Date object or null
+  if (rawUpdates.hasOwnProperty('startDate')) {
+    const clientStartDate = rawUpdates.startDate;
     if (clientStartDate === null) { // Intent to clear
-      if (taskToUpdate.startDate) { // Only unset if it exists
+      if (taskToUpdate.startDate) { 
         updatePayload.$unset.startDate = "";
         changedFields++;
       }
-    } else {
-      const newStartDate = new Date(clientStartDate);
+    } else { // Intent to set/change
+      const newStartDate = clientStartDate instanceof Date ? clientStartDate : new Date(clientStartDate);
       if (isValid(newStartDate)) {
         if (!taskToUpdate.startDate || new Date(taskToUpdate.startDate).getTime() !== newStartDate.getTime()) {
           updatePayload.$set.startDate = newStartDate;
           changedFields++;
         }
-      } else {
-         // Handle invalid date if necessary, or ignore
       }
     }
   }
 
   // DueDate
-  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'dueDate')) {
-    const clientDueDate = rawUpdates.dueDate; // Date object or null
-    if (clientDueDate === null) { // Intent to clear
-      if (taskToUpdate.dueDate) { // Only unset if it exists
+  if (rawUpdates.hasOwnProperty('dueDate')) {
+    const clientDueDate = rawUpdates.dueDate;
+    if (clientDueDate === null) { 
+      if (taskToUpdate.dueDate) { 
         updatePayload.$unset.dueDate = "";
         changedFields++;
       }
-    } else {
-      const newDueDate = new Date(clientDueDate);
+    } else { 
+      const newDueDate = clientDueDate instanceof Date ? clientDueDate : new Date(clientDueDate);
       if (isValid(newDueDate)) {
          if (!taskToUpdate.dueDate || new Date(taskToUpdate.dueDate).getTime() !== newDueDate.getTime()) {
           updatePayload.$set.dueDate = newDueDate;
           changedFields++;
         }
-      } else {
-        // Handle invalid date
       }
     }
   }
   
   // AssigneeId
-  if (Object.prototype.hasOwnProperty.call(rawUpdates, 'assigneeId')) {
-    const clientAssigneeId = rawUpdates.assigneeId; // string or null
-    if (clientAssigneeId === null || clientAssigneeId === undefined || clientAssigneeId.trim() === "") { // Intent to clear
-      if (taskToUpdate.assigneeId) { // Only unset if it exists
+  if (rawUpdates.hasOwnProperty('assigneeId')) {
+    const clientAssigneeId = rawUpdates.assigneeId; 
+    if (clientAssigneeId === null || clientAssigneeId === undefined || clientAssigneeId.trim() === "") { 
+      if (taskToUpdate.assigneeId) { 
         updatePayload.$unset.assigneeId = "";
         changedFields++;
       }
-    } else { // Intent to set/change
+    } else { 
         const taskObjective = await ObjectiveCollection.findById(taskToUpdate.objectiveId).populate<{ workspaceId: IWorkspace }>('workspaceId');
         if (!taskObjective || !taskObjective.workspaceId || !(taskObjective.workspaceId as IWorkspace).memberIds) {
             return { error: "Could not verify workspace for assignee." };
@@ -686,5 +745,6 @@ export async function updateTaskAction(
     return { error: "Failed to update task. " + error.message };
   }
 }
+    
 
     
