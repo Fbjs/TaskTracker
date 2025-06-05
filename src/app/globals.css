@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -32,30 +33,30 @@
   }
 
   .dark {
-    --background: 0 0% 12.9%; /* Dark Gray - User's Background (Dark) */
-    --foreground: 0 0% 98%; /* Light Text */
-    --card: 0 0% 15%; /* Slightly lighter dark gray cards */
-    --card-foreground: 0 0% 98%; /* Light text on cards */
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 0%; /* Black - User's Primary (Dark) */
-    --primary-foreground: 0 0% 87.8%; /* Light Gray text on Black */
-    --secondary: 0 0% 14.9%; /* Slightly different dark gray for secondary elements */
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 74.1%; /* Bright Gray - User's Accent (Dark) */
-    --accent-foreground: 0 0% 3.9%; /* Dark text for contrast on bright gray */
-    --destructive: 0 62.8% 30.6%;
+    --background: 220 13% 9%; /* Very dark blue-gray (image) */
+    --foreground: 0 0% 80%; /* Light gray text (image) */
+    --card: 220 9% 12%; /* Darker gray for cards (image) */
+    --card-foreground: 0 0% 80%; /* Light gray text on cards (image) */
+    --popover: 220 9% 10%; /* Dark popover background */
+    --popover-foreground: 0 0% 80%; /* Light text on popover */
+    --primary: 0 0% 28%; /* Medium-dark gray for progress bars and default buttons (compromise) */
+    --primary-foreground: 0 0% 90%; /* Light text on primary */
+    --secondary: 220 9% 15%; /* Slightly different dark gray for secondary elements */
+    --secondary-foreground: 0 0% 80%; /* Light text on secondary */
+    --muted: 220 9% 12%; /* Dark gray for muted backgrounds like TabsList (image) */
+    --muted-foreground: 0 0% 65%; /* Medium gray for text on muted elements */
+    --accent: 220 10% 21%; /* Medium-dark gray for accents (e.g., selected tab from image) */
+    --accent-foreground: 0 0% 85%; /* Light text on accent */
+    --destructive: 0 62.8% 30.6%; /* Adjusted to be a bit darker red for dark theme */
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 20%; /* Darker gray border */
-    --input: 0 0% 20%; /* Darker gray input background */
-    --ring: 0 0% 74.1%; /* Ring color based on dark accent */
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --border: 220 9% 18%; /* Subtle border, lighter than card (image) */
+    --input: 220 9% 18%; /* Input background similar to border */
+    --ring: 220 10% 21%; /* Ring color based on accent */
+    --chart-1: 0 0% 20%; /* Monochrome chart colors */
+    --chart-2: 0 0% 25%;
+    --chart-3: 0 0% 30%;
+    --chart-4: 0 0% 35%;
+    --chart-5: 0 0% 40%;
   }
 }
 
