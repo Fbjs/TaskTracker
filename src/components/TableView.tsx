@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Objective, Task } from "@/types";
@@ -53,7 +54,7 @@ export const TableView = ({ objectives }: TableViewProps) => {
                       <li key={task.id} className="p-3 border rounded-md bg-muted/30 hover:bg-muted/60 transition-colors">
                         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                           <p className="font-medium text-card-foreground flex-1 break-words">{task.description}</p>
-                          <Badge 
+                          <Badge
                             variant={task.status === "Done" ? "default" : (task.status === "Blocked" ? "destructive" : "secondary")}
                             className="whitespace-nowrap capitalize self-start sm:self-center"
                           >
@@ -64,8 +65,8 @@ export const TableView = ({ objectives }: TableViewProps) => {
                           {task.priority && (
                             <span className="block sm:inline"><strong>Priority:</strong> {task.priority}</span>
                           )}
-                          {task.assignee && (
-                            <span className="block sm:inline"><strong>Assignee:</strong> {task.assignee}</span>
+                          {task.assignee && task.assignee.email && (
+                            <span className="block sm:inline"><strong>Assignee:</strong> {task.assignee.email}</span>
                           )}
                           {task.dueDate && (
                             <span className="block sm:inline">
