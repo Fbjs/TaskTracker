@@ -3,10 +3,10 @@
 
 import { revalidatePath } from "next/cache";
 import dbConnect from "@/lib/dbConnect";
-import UserCollection from "@/models/User"; 
-import WorkspaceCollection from "@/models/Workspace"; 
-import ObjectiveCollection from "@/models/Objective"; 
-import TaskCollection from "@/models/Task"; 
+import UserCollection from "@/models/User";
+import WorkspaceCollection from "@/models/Workspace";
+import ObjectiveCollection from "@/models/Objective";
+import TaskCollection from "@/models/Task";
 import type { Objective, Task, TaskStatus, User, Workspace, AISuggestions, TaskPriority } from "@/types";
 import type { ITask } from "@/models/Task";
 import type { IObjective } from "@/models/Objective";
@@ -25,7 +25,7 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
 
   plainObject.id = plainObject._id?.toString();
   delete plainObject._id;
-  delete plainObject.password; 
+  delete plainObject.password;
 
   if (plainObject.createdAt && typeof plainObject.createdAt === 'string') {
     plainObject.createdAt = new Date(plainObject.createdAt);
@@ -39,7 +39,7 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
   if (plainObject.dueDate && typeof plainObject.dueDate === 'string') {
     plainObject.dueDate = new Date(plainObject.dueDate);
   }
-  
+
   if (plainObject.ownerId && typeof plainObject.ownerId !== 'string') {
     plainObject.ownerId = plainObject.ownerId.toString();
   }
@@ -47,7 +47,7 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
   if (plainObject.memberIds && Array.isArray(plainObject.memberIds)) {
     plainObject.memberIds = plainObject.memberIds.map((id: any) => id.toString());
   }
-  
+
   if (plainObject.assigneeId && typeof plainObject.assigneeId !== 'string') {
     if (plainObject.assigneeId.email) { // If populated
         plainObject.assignee = {
@@ -62,7 +62,7 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
   if (plainObject.tasks && Array.isArray(plainObject.tasks)) {
     plainObject.tasks = plainObject.tasks.map((task: any) => serializeDocument<Task>(task));
   }
-  
+
   if (plainObject.userId && typeof plainObject.userId !== 'string') {
     plainObject.userId = plainObject.userId.toString();
   }
@@ -91,11 +91,11 @@ export async function registerUserAction(email: string, passwordPlain: string): 
 
     const hashedPassword = await bcrypt.hash(passwordPlain, SALT_ROUNDS);
     const newUserDoc = await UserCollection.create({ email: email.toLowerCase(), password: hashedPassword });
-    
+
     return serializeDocument<IUser>(newUserDoc) as User;
   } catch (error: any) {
     console.error("Error registering user:", error);
-    if (error.code === 11000) { 
+    if (error.code === 11000) {
         return { error: "User with this email already exists." };
     }
     return { error: "Failed to register user. " + (error.message || "Please try again.") };
@@ -114,7 +114,7 @@ export async function loginUserAction(email: string, passwordPlain: string): Pro
     if (!isMatch) {
       return { error: "Invalid email or password." };
     }
-    
+
     return serializeDocument<IUser>(userDoc) as User;
   } catch (error: any) {
     console.error("Error logging in user:", error);
@@ -132,8 +132,8 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
 
   let userWorkspaces: Workspace[] = [];
   try {
-    const userWorkspacesDocs = await WorkspaceCollection.find({ 
-      $or: [{ ownerId: userId }, { memberIds: userId }] 
+    const userWorkspacesDocs = await WorkspaceCollection.find({
+      $or: [{ ownerId: userId }, { memberIds: userId }]
     }).lean();
     userWorkspaces = userWorkspacesDocs.map(doc => serializeDocument<IWorkspace>(doc) as Workspace);
 
@@ -142,10 +142,10 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
       const defaultWorkspaceData = {
         name: "My First Workspace",
         ownerId: new mongoose.Types.ObjectId(userId),
-        memberIds: [new mongoose.Types.ObjectId(userId)] 
+        memberIds: [new mongoose.Types.ObjectId(userId)]
       };
       const newWsDoc = await WorkspaceCollection.create(defaultWorkspaceData);
-      const createdWorkspace = serializeDocument<IWorkspace>(newWsDoc) as Workspace; 
+      const createdWorkspace = serializeDocument<IWorkspace>(newWsDoc) as Workspace;
       userWorkspaces.push(createdWorkspace);
     }
   } catch (error) {
@@ -161,11 +161,11 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
         .populate<{ tasks: ITask[] }>({
             path: 'tasks',
             populate: {
-                path: 'assigneeId', 
-                select: 'email _id' 
+                path: 'assigneeId',
+                select: 'email _id'
             }
         })
-        .lean(); 
+        .lean();
 
       objectives = objectivesDocs.map(objDoc => serializeDocument<IObjective>(objDoc) as Objective);
 
@@ -173,7 +173,7 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
       console.error("Error fetching objectives:", error);
     }
   }
-  
+
   return { objectives, workspaces: userWorkspaces };
 }
 
@@ -193,16 +193,16 @@ export async function createWorkspaceAction(name: string, ownerId: string): Prom
         return { error: "Owner user not found." };
     }
 
-    const newWorkspaceDoc = await WorkspaceCollection.create({ 
-      name, 
+    const newWorkspaceDoc = await WorkspaceCollection.create({
+      name,
       ownerId: ownerObjectId,
-      memberIds: [ownerObjectId] 
+      memberIds: [ownerObjectId]
     });
     revalidatePath("/");
     return serializeDocument<IWorkspace>(newWorkspaceDoc) as Workspace;
   } catch (error: any) {
     console.error("Error creating workspace:", error);
-    if (error.code === 11000) { 
+    if (error.code === 11000) {
       return { error: "A workspace with this name might already exist or other unique constraint violation." };
     }
     return { error: "Failed to create workspace. " + error.message };
@@ -276,9 +276,9 @@ export async function removeMemberFromWorkspaceAction(workspaceId: string, membe
 
     await TaskCollection.updateMany(
       { objectiveId: { $in: objectiveIds }, assigneeId: new mongoose.Types.ObjectId(memberIdToRemove) },
-      { $unset: { assigneeId: "" } } 
+      { $unset: { assigneeId: "" } }
     );
-    
+
     revalidatePath("/");
     return serializeDocument<IWorkspace>(workspace) as Workspace;
   } catch (error: any) {
@@ -295,7 +295,7 @@ export async function getWorkspaceMembersAction(workspaceId: string): Promise<Us
   try {
     const workspace = await WorkspaceCollection.findById(workspaceId).populate<{ memberIds: IUser[] }>({
         path: 'memberIds',
-        select: 'email _id' 
+        select: 'email _id'
     }).lean();
     if (!workspace) {
       return { error: "Workspace not found." };
@@ -312,7 +312,7 @@ export async function handleSuggestTasks(objectivePrompt: string): Promise<AISug
   try {
     const input: SuggestTasksInput = { objectivePrompt };
     const result: SuggestTasksOutput = await genkitSuggestTasks(input);
-    return result; 
+    return result;
   } catch (error) {
     console.error("Error calling AI suggestion flow:", error);
     return { error: "Failed to get AI suggestions. Please try again." };
@@ -346,7 +346,7 @@ export async function addObjectiveAction(
       description,
       userId: new mongoose.Types.ObjectId(userId),
       workspaceId: new mongoose.Types.ObjectId(workspaceId),
-      tasks: [] 
+      tasks: []
     });
 
     if (tasksData && tasksData.length > 0) {
@@ -363,18 +363,18 @@ export async function addObjectiveAction(
                     dueDate: taskInput.dueDate ? new Date(taskInput.dueDate) : undefined,
                     status: "To Do" as TaskStatus,
                     priority: "Medium" as TaskPriority,
-                    objectiveId: newObjectiveDoc!._id, 
-                    createdAt: new Date(), 
+                    objectiveId: newObjectiveDoc!._id,
+                    createdAt: new Date(),
                 }
             });
-        
+
         if (tasksToInsert.length > 0) {
             const createdTasks = await TaskCollection.insertMany(tasksToInsert);
             newObjectiveDoc.tasks = createdTasks.map(t => t._id);
             await newObjectiveDoc.save();
         }
     }
-    
+
     const populatedObjectiveDoc = await ObjectiveCollection.findById(newObjectiveDoc._id)
       .populate<{ tasks: ITask[] }>({
           path: 'tasks',
@@ -388,11 +388,11 @@ export async function addObjectiveAction(
         if (fallbackObjective) return serializeDocument<IObjective>(fallbackObjective) as Objective;
         return { error: "Failed to retrieve the newly created objective with tasks."};
     }
-    
+
     return serializeDocument<IObjective>(populatedObjectiveDoc) as Objective;
 
   } catch (error: any) {
-     if (newObjectiveDoc && !newObjectiveDoc.isNew) { 
+     if (newObjectiveDoc && !newObjectiveDoc.isNew) {
         const fallbackObjective = await ObjectiveCollection.findById(newObjectiveDoc._id)
           .populate<{ tasks: ITask[] }>({
               path: 'tasks',
@@ -406,7 +406,7 @@ export async function addObjectiveAction(
 }
 
 export async function updateObjectiveAction(
-  objectiveId: string, 
+  objectiveId: string,
   newDescription: string,
   newTasksData: { description: string; assigneeId?: string; startDate?: Date; dueDate?: Date }[] = [],
   tasksToDeleteIds: string[] = [],
@@ -426,45 +426,58 @@ export async function updateObjectiveAction(
     const workspace = await WorkspaceCollection.findById(objective.workspaceId);
     if (!workspace) return { error: "Associated workspace not found. Cannot validate members." };
 
-    // Process tasks to delete
     if (tasksToDeleteIds.length > 0) {
       await TaskCollection.deleteMany({ _id: { $in: tasksToDeleteIds }, objectiveId: objective._id });
       objective.tasks = objective.tasks.filter(taskId => !tasksToDeleteIds.includes(taskId.toString()));
     }
 
-    // Process tasks to update
     if (tasksToUpdateData.length > 0) {
       for (const taskUpdate of tasksToUpdateData) {
-        const taskToUpdate = await TaskCollection.findById(taskUpdate.id);
-        if (taskToUpdate && taskToUpdate.objectiveId.toString() === objectiveId) {
-          if (taskUpdate.description) taskToUpdate.description = taskUpdate.description;
-          
-          if (taskUpdate.assigneeId === null) { 
-            taskToUpdate.assigneeId = undefined;
-          } else if (taskUpdate.assigneeId) { 
-            if (!workspace.memberIds.map(id => id.toString()).includes(taskUpdate.assigneeId)) {
-              throw new Error(`Cannot assign task ${taskUpdate.description || taskToUpdate.description}: User ${taskUpdate.assigneeId} is not a member of the workspace.`);
+        const taskToUpdateDoc = await TaskCollection.findById(taskUpdate.id);
+        if (taskToUpdateDoc && taskToUpdateDoc.objectiveId.toString() === objectiveId) {
+          const updateFields: any = { $set: {}, $unset: {} };
+
+          if (Object.prototype.hasOwnProperty.call(taskUpdate, 'description')) {
+            updateFields.$set.description = taskUpdate.description;
+          }
+
+          if (Object.prototype.hasOwnProperty.call(taskUpdate, 'assigneeId')) {
+            if (taskUpdate.assigneeId === null || taskUpdate.assigneeId === undefined || taskUpdate.assigneeId.trim() === "") {
+              updateFields.$unset.assigneeId = "";
+            } else {
+              if (!workspace.memberIds.map(id => id.toString()).includes(taskUpdate.assigneeId)) {
+                throw new Error(`Cannot assign task ${taskUpdate.description || taskToUpdateDoc.description}: User ${taskUpdate.assigneeId} is not a member of the workspace.`);
+              }
+              updateFields.$set.assigneeId = new mongoose.Types.ObjectId(taskUpdate.assigneeId);
             }
-            taskToUpdate.assigneeId = new mongoose.Types.ObjectId(taskUpdate.assigneeId);
           }
 
-          if (taskUpdate.startDate === null) {
-            taskToUpdate.startDate = undefined;
-          } else if (taskUpdate.startDate) {
-            taskToUpdate.startDate = new Date(taskUpdate.startDate);
+          if (Object.prototype.hasOwnProperty.call(taskUpdate, 'startDate')) {
+            if (taskUpdate.startDate === null || taskUpdate.startDate === undefined) {
+              updateFields.$unset.startDate = "";
+            } else {
+              updateFields.$set.startDate = new Date(taskUpdate.startDate);
+            }
           }
 
-          if (taskUpdate.dueDate === null) {
-            taskToUpdate.dueDate = undefined;
-          } else if (taskUpdate.dueDate) {
-            taskToUpdate.dueDate = new Date(taskUpdate.dueDate);
+          if (Object.prototype.hasOwnProperty.call(taskUpdate, 'dueDate')) {
+            if (taskUpdate.dueDate === null || taskUpdate.dueDate === undefined) {
+              updateFields.$unset.dueDate = "";
+            } else {
+              updateFields.$set.dueDate = new Date(taskUpdate.dueDate);
+            }
           }
-          await taskToUpdate.save();
+
+          if (Object.keys(updateFields.$set).length === 0) delete updateFields.$set;
+          if (Object.keys(updateFields.$unset).length === 0) delete updateFields.$unset;
+
+          if (Object.keys(updateFields).length > 0) {
+            await TaskCollection.findByIdAndUpdate(taskUpdate.id, updateFields);
+          }
         }
       }
     }
-    
-    // Process new tasks to create
+
     if (newTasksData.length > 0) {
         const newTasksToCreate = newTasksData
             .filter(td => td.description && td.description.trim() !== "")
@@ -479,11 +492,11 @@ export async function updateObjectiveAction(
                     dueDate: taskInput.dueDate ? new Date(taskInput.dueDate) : undefined,
                     status: "To Do" as TaskStatus,
                     priority: "Medium" as TaskPriority,
-                    objectiveId: objective._id, 
+                    objectiveId: objective._id,
                     createdAt: new Date(),
                 };
             });
-        
+
         if (newTasksToCreate.length > 0) {
             const createdNewTasks = await TaskCollection.insertMany(newTasksToCreate);
             objective.tasks.push(...createdNewTasks.map(t => t._id as mongoose.Types.ObjectId));
@@ -491,7 +504,7 @@ export async function updateObjectiveAction(
     }
 
     await objective.save();
-    
+
     const populatedObjective = await ObjectiveCollection.findById(objective.id)
         .populate<{ tasks: ITask[] }>({
             path: 'tasks',
@@ -500,7 +513,7 @@ export async function updateObjectiveAction(
         .exec();
 
     if (!populatedObjective) return { error: "Failed to repopulate objective after update."};
-    
+
     revalidatePath("/");
     return serializeDocument<IObjective>(populatedObjective) as Objective;
 
@@ -534,18 +547,19 @@ export async function updateTaskStatusAction(taskId: string, newStatus: TaskStat
 
 export async function updateTaskAction(
   taskId: string,
-  objectiveId: string, 
+  objectiveId: string, // Keep for context, though not directly used in this simplified update
   updates: Partial<Omit<Task, 'id' | 'objectiveId' | 'createdAt' | 'assignee'>> & { assigneeId?: string | null}
 ): Promise<Task | { error: string }> {
   await dbConnect();
   if (!taskId) return { error: "Task ID is required." };
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { objectiveId: _, assignee, ...rawUpdates } = updates; 
-  
-  const updatesForSet: any = {};
+  const { objectiveId: _, assignee, ...rawUpdates } = updates;
 
-  // Process description, status, priority if present
+  const updatesForSet: any = {};
+  const updatesToUnset: any = {};
+
+
   if (Object.prototype.hasOwnProperty.call(rawUpdates, 'description')) {
     updatesForSet.description = rawUpdates.description;
   }
@@ -556,34 +570,29 @@ export async function updateTaskAction(
     updatesForSet.priority = rawUpdates.priority;
   }
 
-  // Process startDate
+
   if (Object.prototype.hasOwnProperty.call(rawUpdates, 'startDate')) {
-    if (rawUpdates.startDate === null) {
-      updatesForSet.startDate = undefined; // Mongoose unsets the field
+    if (rawUpdates.startDate === null || rawUpdates.startDate === undefined || rawUpdates.startDate === "") {
+      updatesToUnset.startDate = "";
     } else if (rawUpdates.startDate) {
       updatesForSet.startDate = new Date(rawUpdates.startDate);
-    } else { // E.g. if rawUpdates.startDate is an empty string or explicit undefined
-      updatesForSet.startDate = undefined;
     }
   }
 
-  // Process dueDate
+
   if (Object.prototype.hasOwnProperty.call(rawUpdates, 'dueDate')) {
-    if (rawUpdates.dueDate === null) {
-      updatesForSet.dueDate = undefined;
+    if (rawUpdates.dueDate === null || rawUpdates.dueDate === undefined || rawUpdates.dueDate === "") {
+      updatesToUnset.dueDate = "";
     } else if (rawUpdates.dueDate) {
       updatesForSet.dueDate = new Date(rawUpdates.dueDate);
-    } else {
-      updatesForSet.dueDate = undefined;
     }
   }
-  
-  // Process assigneeId
+
+
   if (Object.prototype.hasOwnProperty.call(rawUpdates, 'assigneeId')) {
     if (rawUpdates.assigneeId === null || rawUpdates.assigneeId === undefined || rawUpdates.assigneeId.trim() === "") {
-      updatesForSet.assigneeId = undefined; // Unset assignee
+      updatesToUnset.assigneeId = "";
     } else {
-      // Validate assignee is member of workspace
       const taskDocForWorkspaceCheck = await TaskCollection.findById(taskId).populate({
         path: 'objectiveId',
         select: 'workspaceId',
@@ -592,7 +601,7 @@ export async function updateTaskAction(
             select: 'memberIds'
         }
       });
-     
+
       if (taskDocForWorkspaceCheck && taskDocForWorkspaceCheck.objectiveId && (taskDocForWorkspaceCheck.objectiveId as any).workspaceId) {
           const workspace = (taskDocForWorkspaceCheck.objectiveId as any).workspaceId as IWorkspace;
           if (workspace && workspace.memberIds) {
@@ -609,8 +618,15 @@ export async function updateTaskAction(
     }
   }
 
-  if (Object.keys(updatesForSet).length === 0) {
-    // No actual updates to perform, return current task
+  const finalUpdateQuery: any = {};
+  if (Object.keys(updatesForSet).length > 0) {
+    finalUpdateQuery.$set = updatesForSet;
+  }
+  if (Object.keys(updatesToUnset).length > 0) {
+    finalUpdateQuery.$unset = updatesToUnset;
+  }
+
+  if (Object.keys(finalUpdateQuery).length === 0) {
      const currentTaskDoc = await TaskCollection.findById(taskId).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
      if (!currentTaskDoc) return { error: "Task not found."};
      return serializeDocument<ITask>(currentTaskDoc) as Task;
@@ -619,7 +635,7 @@ export async function updateTaskAction(
   try {
     const updatedTaskDoc = await TaskCollection.findByIdAndUpdate(
       taskId,
-      { $set: updatesForSet }, 
+      finalUpdateQuery,
       { new: true, runValidators: true }
     ).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
 
@@ -634,6 +650,3 @@ export async function updateTaskAction(
     return { error: "Failed to update task. " + error.message };
   }
 }
-
-
-    

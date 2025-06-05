@@ -12,7 +12,7 @@ interface CustomGanttChartViewProps {
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
   Low: "bg-green-500",
-  Medium: "bg-yellow-500", // Consider Tailwind's amber or orange for better contrast if yellow-500 is too light
+  Medium: "bg-yellow-500",
   High: "bg-red-500",
 };
 
@@ -31,9 +31,8 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
     <div className="space-y-8">
       {objectives.map((objective) => {
         const tasksWithDates = objective.tasks.filter(task => {
-          const start = getValidDate(task.startDate || task.createdAt);
+          const start = getValidDate(task.startDate || task.createdAt); // Use startDate first, then createdAt
           const end = getValidDate(task.dueDate);
-          // Ensure start and end are valid, and end is not before start
           return start && end && startOfDay(end).getTime() >= startOfDay(start).getTime();
         });
 
@@ -50,37 +49,36 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
           );
         }
 
-        // Determine the overall date range for this objective's tasks
         const allTaskStartDates = tasksWithDates.map(t => startOfDay(getValidDate(t.startDate || t.createdAt)!));
         const allTaskEndDates = tasksWithDates.map(t => startOfDay(getValidDate(t.dueDate)!));
 
         const overallMinDate = new Date(Math.min(...allTaskStartDates.map(d => d.getTime())));
         let tempOverallMaxDate = new Date(Math.max(...allTaskEndDates.map(d => d.getTime())));
-
-        // Ensure overallMaxDate is at least overallMinDate
+        
         if (isValid(overallMinDate) && isValid(tempOverallMaxDate) && tempOverallMaxDate.getTime() < overallMinDate.getTime()) {
             tempOverallMaxDate = overallMinDate;
         }
-        const overallMaxDate = tempOverallMaxDate;
-        
-        let chartDays: Date[] = [];
-        if (isValid(overallMinDate) && isValid(overallMaxDate)) {
-           // Ensure the interval is valid before calling eachDayOfInterval
-           if (overallMaxDate.getTime() >= overallMinDate.getTime()) {
-             chartDays = eachDayOfInterval({ start: overallMinDate, end: overallMaxDate });
-           } else {
-             // Fallback: if somehow maxDate is before minDate after checks, use just minDate
-             chartDays = [overallMinDate];
-           }
-        } else {
-           return (
-            <Card key={objective.id} className="shadow-lg">
-              <CardHeader><CardTitle className="font-headline">{objective.description}</CardTitle></CardHeader>
-              <CardContent><p className="text-destructive">Error: Invalid date range for Gantt chart (Objective: {objective.description}). Min: {overallMinDate.toString()}, Max: {overallMaxDate.toString()}</p></CardContent>
-            </Card>
-          );
+         // Ensure the range is at least one day for the header
+        if (isValid(overallMinDate) && isValid(tempOverallMaxDate) && differenceInDays(tempOverallMaxDate, overallMinDate) < 0) {
+             tempOverallMaxDate = overallMinDate; // or addDays(overallMinDate, 1) if you want at least 2 days
         }
-        
+
+        const overallMaxDate = tempOverallMaxDate;
+
+        let chartDays: Date[] = [];
+        if (isValid(overallMinDate) && isValid(overallMaxDate) && overallMaxDate.getTime() >= overallMinDate.getTime()) {
+           chartDays = eachDayOfInterval({ start: overallMinDate, end: overallMaxDate });
+        } else {
+           // Fallback if range is still invalid (e.g., only one date or error)
+           if (isValid(overallMinDate)) chartDays = [overallMinDate];
+           else return (
+                <Card key={objective.id} className="shadow-lg">
+                  <CardHeader><CardTitle className="font-headline">{objective.description}</CardTitle></CardHeader>
+                  <CardContent><p className="text-destructive">Error: Invalid date range for Gantt chart header (Objective: {objective.description}). MinDate: {overallMinDate.toString()}, MaxDate: {overallMaxDate.toString()}</p></CardContent>
+                </Card>
+              );
+        }
+
         const DAY_WIDTH = 40; // pixels
 
         return (
@@ -90,9 +88,8 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
             </CardHeader>
             <CardContent>
               <ScrollArea className="w-full whitespace-nowrap">
-                <div className="relative pt-8"> {/* Added padding top for spacing if headers are sticky */}
-                  
-                  {/* Day Headers */}
+                <div className="relative pt-8">
+
                   <div className="flex sticky top-0 z-10 bg-background/80 backdrop-blur-sm mb-1">
                     <div className="sticky left-0 z-20 bg-background/80 backdrop-blur-sm min-w-[150px] md:min-w-[200px] p-2 border-r border-b font-semibold text-xs text-muted-foreground">Task</div>
                     {chartDays.map((day, dayIdx) => (
@@ -107,28 +104,23 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                     ))}
                   </div>
 
-                  {/* Task Rows */}
                   {tasksWithDates.map((task) => {
                     const taskStartRaw = getValidDate(task.startDate || task.createdAt)!;
                     const taskEndRaw = getValidDate(task.dueDate)!;
 
-                    // Normalize to start of day for accurate diff and positioning
                     const taskStart = startOfDay(taskStartRaw);
                     const taskEnd = startOfDay(taskEndRaw);
-                    
-                    // Ensure task end is not before task start for duration calculation
+
                     const validatedTaskEnd = taskEnd.getTime() < taskStart.getTime() ? taskStart : taskEnd;
 
                     const startDayIndex = differenceInDays(taskStart, overallMinDate);
-                    // Duration in days, inclusive of start and end. A task from Jun 5 to Jun 5 is 1 day.
-                    const durationDays = differenceInDays(validatedTaskEnd, taskStart) + 1; 
+                    const durationDays = Math.max(1, differenceInDays(validatedTaskEnd, taskStart) + 1); // Ensure duration is at least 1 day
 
                     const barOffset = startDayIndex * DAY_WIDTH;
-                    // Simplified barWidth for debugging alignment
                     const barWidth = durationDays * DAY_WIDTH;
 
 
-                    const priorityColor = PRIORITY_COLORS[task.priority] || 'bg-gray-400'; // Fallback color
+                    const priorityColor = PRIORITY_COLORS[task.priority] || 'bg-gray-400';
 
                     return (
                       <div key={task.id} className="flex items-center border-b hover:bg-muted/30 h-10">
@@ -141,11 +133,10 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
                             style={{
                               left: `${barOffset}px`,
                               width: `${barWidth}px`,
-                              minWidth: `${DAY_WIDTH}px` // Simplified minWidth
+                              minWidth: `${DAY_WIDTH}px` // Ensure single-day tasks are visible
                             }}
                             title={`${task.description} (${format(taskStartRaw, 'MMM d')} - ${format(taskEndRaw, 'MMM d')})`}
                           >
-                            {/* Content inside the bar removed as per previous request */}
                           </div>
                         </div>
                       </div>
@@ -161,8 +152,3 @@ export const CustomGanttChartView = ({ objectives }: CustomGanttChartViewProps) 
     </div>
   );
 };
-
-// Ensure text-xxs is defined in globals.css if not already:
-// .text-xxs { font-size: 0.625rem; /* 10px */ }
-// Or use an existing Tailwind class like text-[10px]
-// Ensure shadow-md is used on bars for better visibility if colors are light.
