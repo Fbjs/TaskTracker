@@ -1,7 +1,7 @@
 
 import mongoose, { Schema, Document, models, Model } from 'mongoose';
 import { ALL_TASK_STATUSES, ALL_TASK_PRIORITIES, TaskStatus, TaskPriority } from '@/types';
-// import type { IUser } from './User'; // If assignee becomes a User ref
+import type { IUser } from './User'; 
 import type { IObjective } from './Objective';
 
 export interface ITask extends Document {
@@ -9,7 +9,7 @@ export interface ITask extends Document {
   status: TaskStatus;
   priority: TaskPriority;
   dueDate?: Date;
-  assignee?: string; // Could be ObjectId ref: 'User' in the future
+  assigneeId?: IUser['_id']; // Changed from assignee: string
   objectiveId: IObjective['_id'];
 }
 
@@ -34,9 +34,10 @@ const TaskSchema: Schema<ITask> = new Schema({
   dueDate: {
     type: Date,
   },
-  assignee: {
-    type: String, // For simplicity now, can be upgraded to ObjectId ref: 'User'
-    trim: true,
+  assigneeId: { // Changed from assignee
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: false, 
   },
   objectiveId: {
     type: Schema.Types.ObjectId,

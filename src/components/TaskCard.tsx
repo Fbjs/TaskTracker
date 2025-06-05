@@ -1,3 +1,4 @@
+
 import type { Task, TaskPriority, TaskStatus } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,10 +58,10 @@ export const TaskCard = ({ task, isDragging, onDragStart, onEditTask }: TaskCard
             <span>{format(new Date(task.dueDate), "MMM d, yyyy")}</span>
           </div>
         )}
-        {task.assignee && (
+        {task.assignee && task.assignee.email && ( // Changed to task.assignee.email
           <div className="flex items-center text-muted-foreground">
             <User className="mr-2 h-4 w-4" />
-            <span>{task.assignee}</span>
+            <span>{task.assignee.email}</span>
           </div>
         )}
       </CardContent>

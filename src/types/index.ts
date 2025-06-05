@@ -15,7 +15,7 @@ export interface Workspace {
   id: string;
   name: string;
   ownerId: string;
-  // memberIds?: string[]; // For future use
+  memberIds: string[]; // Changed: made non-optional
 }
 
 export interface Task {
@@ -25,7 +25,8 @@ export interface Task {
   priority: TaskPriority;
   dueDate?: Date;
   createdAt: Date;
-  assignee?: string;
+  assigneeId?: string; // ID of the assigned user
+  assignee?: Pick<User, 'id' | 'email'>; // Populated assignee details for display
   objectiveId: string;
 }
 
@@ -33,13 +34,13 @@ export interface Objective {
   id: string;
   description: string;
   tasks: Task[];
-  userId?: string; // ID of the user who created it
+  userId?: string; // ID of the user who created it (likely owner of workspace)
   workspaceId?: string; // ID of the workspace it belongs to
 }
 
 export interface SuggestedTask {
   taskDescription: string;
-  assignee: string;
+  assignee: string; // This might need to become assigneeEmail or similar if AI suggests emails
 }
 
 export interface AISuggestions {

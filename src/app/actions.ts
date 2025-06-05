@@ -14,21 +14,19 @@ import type { IWorkspace } from "@/models/Workspace";
 import type { IUser } from "@/models/User";
 import { suggestTasks as genkitSuggestTasks, type SuggestTasksInput, type SuggestTasksOutput } from "@/ai/flows/suggest-tasks";
 import bcrypt from 'bcrypt';
+import mongoose from "mongoose";
 
 const SALT_ROUNDS = 10;
 
 // Helper to convert Mongoose document to a plain object compatible with frontend types
-// Handles _id -> id conversion and ensures dates are Date objects
-// Excludes password field for User objects
-function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: any, password?: string }>(doc: any): Omit<T, 'password'> {
+function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: any, password?: string, memberIds?: any[], tasks?: any[], assigneeId?: any }>(doc: any): Omit<T, 'password'> {
   if (!doc) return null as unknown as Omit<T, 'password'>;
   const plainObject = doc.toObject ? doc.toObject({ getters: true, versionKey: false }) : { ...doc };
 
   plainObject.id = plainObject._id?.toString();
   delete plainObject._id;
-  delete plainObject.password; // Ensure password is not sent to client
+  delete plainObject.password; 
 
-  // Ensure dates are Date objects if they are not already
   if (plainObject.createdAt && typeof plainObject.createdAt === 'string') {
     plainObject.createdAt = new Date(plainObject.createdAt);
   }
@@ -38,10 +36,40 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
   if (plainObject.dueDate && typeof plainObject.dueDate === 'string') {
     plainObject.dueDate = new Date(plainObject.dueDate);
   }
+  
+  if (plainObject.ownerId && typeof plainObject.ownerId !== 'string') {
+    plainObject.ownerId = plainObject.ownerId.toString();
+  }
+
+  if (plainObject.memberIds && Array.isArray(plainObject.memberIds)) {
+    plainObject.memberIds = plainObject.memberIds.map((id: any) => id.toString());
+  }
+  
+  if (plainObject.assigneeId && typeof plainObject.assigneeId !== 'string') {
+    if (plainObject.assigneeId.email) { // If populated
+        plainObject.assignee = {
+            id: plainObject.assigneeId._id.toString(),
+            email: plainObject.assigneeId.email,
+        }
+    }
+    plainObject.assigneeId = plainObject.assigneeId._id?.toString() || plainObject.assigneeId.toString();
+  }
+
 
   if (plainObject.tasks && Array.isArray(plainObject.tasks)) {
     plainObject.tasks = plainObject.tasks.map((task: any) => serializeDocument<Task>(task));
   }
+  
+  if (plainObject.userId && typeof plainObject.userId !== 'string') {
+    plainObject.userId = plainObject.userId.toString();
+  }
+  if (plainObject.workspaceId && typeof plainObject.workspaceId !== 'string') {
+    plainObject.workspaceId = plainObject.workspaceId.toString();
+  }
+   if (plainObject.objectiveId && typeof plainObject.objectiveId !== 'string') {
+    plainObject.objectiveId = plainObject.objectiveId.toString();
+  }
+
 
   return plainObject as Omit<T, 'password'>;
 }
@@ -64,7 +92,7 @@ export async function registerUserAction(email: string, passwordPlain: string): 
     return serializeDocument<IUser>(newUserDoc) as User;
   } catch (error: any) {
     console.error("Error registering user:", error);
-    if (error.code === 11000) { // Duplicate key error
+    if (error.code === 11000) { 
         return { error: "User with this email already exists." };
     }
     return { error: "Failed to register user. " + (error.message || "Please try again.") };
@@ -74,7 +102,7 @@ export async function registerUserAction(email: string, passwordPlain: string): 
 export async function loginUserAction(email: string, passwordPlain: string): Promise<User | { error: string }> {
   await dbConnect();
   try {
-    const userDoc = await UserCollection.findOne({ email: email.toLowerCase() });
+    const userDoc = await UserCollection.findOne({ email: email.toLowerCase() }).lean();
     if (!userDoc || !userDoc.password) {
       return { error: "Invalid email or password." };
     }
@@ -101,22 +129,20 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
 
   let userWorkspaces: Workspace[] = [];
   try {
-    const userWorkspacesDocs = await WorkspaceCollection.find({ ownerId: userId }).lean(); // lean for plain objects
-    userWorkspaces = userWorkspacesDocs.map(doc => ({
-        ...doc,
-        id: doc._id.toString(),
-        _id: undefined, // remove _id
-        ownerId: doc.ownerId.toString(), // ensure ownerId is string
-    }));
+    const userWorkspacesDocs = await WorkspaceCollection.find({ 
+      $or: [{ ownerId: userId }, { memberIds: userId }] 
+    }).lean();
+    userWorkspaces = userWorkspacesDocs.map(doc => serializeDocument<IWorkspace>(doc) as Workspace);
 
 
     if (userWorkspaces.length === 0) {
-      const defaultWorkspaceData: Omit<IWorkspace, '_id' | 'createdAt' | 'updatedAt' | 'memberIds'> & { ownerId: string } = {
+      const defaultWorkspaceData = {
         name: "My First Workspace",
-        ownerId: userId,
+        ownerId: new mongoose.Types.ObjectId(userId),
+        memberIds: [new mongoose.Types.ObjectId(userId)] // Owner is also a member
       };
       const newWsDoc = await WorkspaceCollection.create(defaultWorkspaceData);
-      const createdWorkspace = serializeDocument<IWorkspace>(newWsDoc) as Workspace; // cast to Workspace after serialization
+      const createdWorkspace = serializeDocument<IWorkspace>(newWsDoc) as Workspace; 
       userWorkspaces.push(createdWorkspace);
     }
   } catch (error) {
@@ -129,27 +155,16 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
     const workspaceIds = userWorkspaces.map(ws => ws.id);
     try {
       const objectivesDocs = await ObjectiveCollection.find({ workspaceId: { $in: workspaceIds } })
-        .populate<{ tasks: ITask[] }>('tasks') 
+        .populate<{ tasks: ITask[] }>({
+            path: 'tasks',
+            populate: {
+                path: 'assigneeId', // Populate assignee details for each task
+                select: 'email _id' // Select only email and id
+            }
+        })
         .lean(); 
 
-      objectives = objectivesDocs.map(objDoc => {
-        const serializedObj = {
-            ...objDoc,
-            id: objDoc._id.toString(),
-            _id: undefined,
-            userId: objDoc.userId?.toString(),
-            workspaceId: objDoc.workspaceId?.toString(),
-            tasks: objDoc.tasks ? objDoc.tasks.map(taskDoc => ({
-                ...taskDoc,
-                id: taskDoc._id.toString(),
-                _id: undefined, 
-                objectiveId: taskDoc.objectiveId?.toString(),
-                createdAt: taskDoc.createdAt ? new Date(taskDoc.createdAt) : new Date(),
-                dueDate: taskDoc.dueDate ? new Date(taskDoc.dueDate) : undefined,
-            })) : [],
-        } as Objective;
-        return serializedObj;
-      });
+      objectives = objectivesDocs.map(objDoc => serializeDocument<IObjective>(objDoc) as Objective);
 
     } catch (error) {
       console.error("Error fetching objectives:", error);
@@ -169,22 +184,79 @@ export async function createWorkspaceAction(name: string, ownerId: string): Prom
   }
 
   try {
-    const ownerExists = await UserCollection.findById(ownerId);
+    const ownerObjectId = new mongoose.Types.ObjectId(ownerId);
+    const ownerExists = await UserCollection.findById(ownerObjectId);
     if (!ownerExists) {
         return { error: "Owner user not found." };
     }
 
-    const newWorkspaceDoc = await WorkspaceCollection.create({ name, ownerId });
+    const newWorkspaceDoc = await WorkspaceCollection.create({ 
+      name, 
+      ownerId: ownerObjectId,
+      memberIds: [ownerObjectId] // Owner is automatically a member
+    });
     revalidatePath("/");
     return serializeDocument<IWorkspace>(newWorkspaceDoc) as Workspace;
   } catch (error: any) {
     console.error("Error creating workspace:", error);
     if (error.code === 11000) { 
-      return { error: "A workspace with this name might already exist for the user or other unique constraint violation." };
+      return { error: "A workspace with this name might already exist or other unique constraint violation." };
     }
     return { error: "Failed to create workspace. " + error.message };
   }
 }
+
+export async function addMemberToWorkspaceAction(workspaceId: string, memberEmail: string, currentUserId: string): Promise<Workspace | { error: string }> {
+  await dbConnect();
+  if (!workspaceId || !memberEmail || !currentUserId) {
+    return { error: "Workspace ID, member email, and current user ID are required." };
+  }
+
+  try {
+    const workspace = await WorkspaceCollection.findById(workspaceId);
+    if (!workspace) {
+      return { error: "Workspace not found." };
+    }
+    if (workspace.ownerId.toString() !== currentUserId) {
+      return { error: "Only the workspace owner can add members." };
+    }
+
+    const memberToAdd = await UserCollection.findOne({ email: memberEmail.toLowerCase() });
+    if (!memberToAdd) {
+      return { error: `User with email ${memberEmail} not found.` };
+    }
+
+    if (workspace.memberIds.map(id => id.toString()).includes(memberToAdd._id.toString())) {
+      return { error: `User ${memberEmail} is already a member of this workspace.` };
+    }
+
+    workspace.memberIds.push(memberToAdd._id);
+    await workspace.save();
+    revalidatePath("/");
+    return serializeDocument<IWorkspace>(workspace) as Workspace;
+  } catch (error: any) {
+    console.error("Error adding member to workspace:", error);
+    return { error: "Failed to add member. " + error.message };
+  }
+}
+
+export async function getWorkspaceMembersAction(workspaceId: string): Promise<User[] | { error: string }> {
+  await dbConnect();
+  if (!workspaceId) {
+    return { error: "Workspace ID is required." };
+  }
+  try {
+    const workspace = await WorkspaceCollection.findById(workspaceId).populate<{ memberIds: IUser[] }>('memberIds', 'email _id').lean();
+    if (!workspace) {
+      return { error: "Workspace not found." };
+    }
+    return workspace.memberIds.map(member => serializeDocument<IUser>(member) as User);
+  } catch (error: any) {
+    console.error("Error fetching workspace members:", error);
+    return { error: "Failed to fetch workspace members. " + error.message };
+  }
+}
+
 
 export async function handleSuggestTasks(objectivePrompt: string): Promise<AISuggestions | { error: string }> {
   try {
@@ -199,7 +271,7 @@ export async function handleSuggestTasks(objectivePrompt: string): Promise<AISug
 
 export async function addObjectiveAction(
   description: string,
-  tasksData: { description: string; assignee?: string }[],
+  tasksData: { description: string; assigneeId?: string }[],
   userId?: string,
   workspaceId?: string
 ): Promise<Objective | { error: string }> {
@@ -213,10 +285,18 @@ export async function addObjectiveAction(
   }
 
   try {
+    // Validate workspace and user membership (optional, but good practice)
+    const workspace = await WorkspaceCollection.findById(workspaceId);
+    if (!workspace) return { error: "Workspace not found." };
+    if (!workspace.memberIds.map(id => id.toString()).includes(userId)) {
+        return { error: "User is not a member of this workspace." };
+    }
+
+
     const newObjectiveDoc = await ObjectiveCollection.create({
       description,
-      userId,
-      workspaceId,
+      userId: new mongoose.Types.ObjectId(userId),
+      workspaceId: new mongoose.Types.ObjectId(workspaceId),
       tasks: [] 
     });
 
@@ -225,7 +305,7 @@ export async function addObjectiveAction(
             .filter(td => td.description.trim() !== "")
             .map(taskInput => ({
                 description: taskInput.description,
-                assignee: taskInput.assignee || undefined,
+                assigneeId: taskInput.assigneeId ? new mongoose.Types.ObjectId(taskInput.assigneeId) : undefined,
                 status: "To Do" as TaskStatus,
                 priority: "Medium" as TaskPriority,
                 objectiveId: newObjectiveDoc._id, 
@@ -240,19 +320,18 @@ export async function addObjectiveAction(
     }
     
     const populatedObjectiveDoc = await ObjectiveCollection.findById(newObjectiveDoc._id)
-      .populate<{ tasks: ITask[] }>('tasks')
+      .populate<{ tasks: ITask[] }>({
+          path: 'tasks',
+          populate: { path: 'assigneeId', select: 'email _id' }
+      })
       .exec();
 
     revalidatePath("/");
     if (!populatedObjectiveDoc) {
         return { error: "Failed to retrieve the newly created objective with tasks."};
     }
-    // Manually serialize here to ensure tasks are also serialized correctly
-    const objectiveWithSerializedTasks = serializeDocument<IObjective>(populatedObjectiveDoc);
-    if (populatedObjectiveDoc.tasks) {
-      objectiveWithSerializedTasks.tasks = populatedObjectiveDoc.tasks.map(taskDoc => serializeDocument<ITask>(taskDoc) as Task);
-    }
-    return objectiveWithSerializedTasks as Objective;
+    
+    return serializeDocument<IObjective>(populatedObjectiveDoc) as Objective;
 
 
   } catch (error: any) {
@@ -271,17 +350,16 @@ export async function updateObjectiveAction(objectiveId: string, newDescription:
       objectiveId,
       { description: newDescription },
       { new: true, runValidators: true }
-    ).populate<{ tasks: ITask[] }>('tasks');
+    ).populate<{ tasks: ITask[] }>({
+        path: 'tasks',
+        populate: { path: 'assigneeId', select: 'email _id' }
+    });
 
     if (!updatedObjectiveDoc) {
       return { error: "Objective not found." };
     }
     revalidatePath("/");
-    const objectiveWithSerializedTasks = serializeDocument<IObjective>(updatedObjectiveDoc);
-    if (updatedObjectiveDoc.tasks) {
-      objectiveWithSerializedTasks.tasks = updatedObjectiveDoc.tasks.map(taskDoc => serializeDocument<ITask>(taskDoc) as Task);
-    }
-    return objectiveWithSerializedTasks as Objective;
+    return serializeDocument<IObjective>(updatedObjectiveDoc) as Objective;
 
   } catch (error: any) {
     console.error("Error updating objective:", error);
@@ -298,7 +376,7 @@ export async function updateTaskStatusAction(taskId: string, newStatus: TaskStat
       taskId,
       { status: newStatus },
       { new: true, runValidators: true }
-    );
+    ).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
 
     if (!updatedTaskDoc) {
       return { success: false, error: "Task not found." };
@@ -314,17 +392,38 @@ export async function updateTaskStatusAction(taskId: string, newStatus: TaskStat
 export async function updateTaskAction(
   taskId: string,
   objectiveId: string, 
-  updates: Partial<Omit<Task, 'id' | 'objectiveId' | 'createdAt'>>
+  updates: Partial<Omit<Task, 'id' | 'objectiveId' | 'createdAt' | 'assignee'>> & { assigneeId?: string | null}
 ): Promise<Task | { error: string }> {
   await dbConnect();
   if (!taskId) return { error: "Task ID is required." };
 
-  const { objectiveId: _, ...validUpdates } = updates;
+  const { objectiveId: _, assignee, ...validUpdates } = updates; // exclude assignee object if present
   
   if (validUpdates.dueDate === null) { 
-    validUpdates.dueDate = undefined;
+    (validUpdates as any).dueDate = undefined; // Handle null dueDate
   } else if (validUpdates.dueDate) {
-    validUpdates.dueDate = new Date(validUpdates.dueDate);
+    (validUpdates as any).dueDate = new Date(validUpdates.dueDate);
+  }
+
+  if (validUpdates.assigneeId === null) {
+    (validUpdates as any).assigneeId = undefined; // Unassign
+  } else if (validUpdates.assigneeId) {
+     // Validate assigneeId is a member of the workspace
+     const taskDoc = await TaskCollection.findById(taskId).populate('objectiveId');
+     if (taskDoc && taskDoc.objectiveId) {
+         const objective = await ObjectiveCollection.findById(taskDoc.objectiveId).populate('workspaceId');
+         if (objective && objective.workspaceId && (objective.workspaceId as unknown as IWorkspace).memberIds) {
+             const workspace = objective.workspaceId as unknown as IWorkspace;
+             if (!workspace.memberIds.map(id => id.toString()).includes(validUpdates.assigneeId)) {
+                 return { error: "Assignee is not a member of this workspace." };
+             }
+             (validUpdates as any).assigneeId = new mongoose.Types.ObjectId(validUpdates.assigneeId);
+         } else {
+            return { error: "Could not verify workspace membership for assignee."};
+         }
+     } else {
+        return { error: "Could not find task or objective to verify assignee."};
+     }
   }
 
 
@@ -333,14 +432,16 @@ export async function updateTaskAction(
       taskId,
       validUpdates,
       { new: true, runValidators: true }
-    );
+    ).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
+
 
     if (!updatedTaskDoc) {
       return { error: "Task not found." };
     }
     revalidatePath("/");
     return serializeDocument<ITask>(updatedTaskDoc) as Task;
-  } catch (error: any) {
+  } catch (error: any)
+{
     console.error("Error updating task:", error);
     return { error: "Failed to update task. " + error.message };
   }

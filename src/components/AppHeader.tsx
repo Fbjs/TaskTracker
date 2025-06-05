@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, LogOut, Briefcase, ChevronDown, Settings, UserCircle } from "lucide-react";
+import { PlusCircle, LogOut, Briefcase, ChevronDown, Settings, UserCircle, Users } from "lucide-react"; // Added Users
 import { LogoIcon } from "@/components/icons/LogoIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -17,15 +17,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Workspace } from "@/types";
-import { WorkspaceDialog } from "./WorkspaceDialog"; // Import WorkspaceDialog
+import { WorkspaceDialog } from "./WorkspaceDialog"; 
 
 
 interface AppHeaderProps {
   onAddObjective: () => void;
-  workspaces: Workspace[]; // Pass workspaces for selector
-  currentWorkspace?: Workspace; // Pass current workspace
-  onWorkspaceSelected: (workspaceId: string) => void; // Callback for workspace selection
-  onWorkspaceCreated: (newWorkspace: Workspace) => void; // Callback for workspace creation
+  workspaces: Workspace[]; 
+  currentWorkspace?: Workspace; 
+  onWorkspaceSelected: (workspaceId: string) => void; 
+  onWorkspaceCreated: (newWorkspace: Workspace) => void; 
+  onManageMembers: () => void; // Added
 }
 
 export const AppHeader = ({ 
@@ -33,10 +34,13 @@ export const AppHeader = ({
   workspaces, 
   currentWorkspace, 
   onWorkspaceSelected,
-  onWorkspaceCreated 
+  onWorkspaceCreated,
+  onManageMembers // Added
 }: AppHeaderProps) => {
   const { user, logout } = useAuth();
   const [isWorkspaceDialogOpen, setIsWorkspaceDialogOpen] = useState(false);
+
+  const isOwner = currentWorkspace && user && currentWorkspace.ownerId === user.id;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -57,19 +61,26 @@ export const AppHeader = ({
                         <ChevronDown className="h-4 w-4 opacity-50" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuContent align="end" className="w-60"> {/* Increased width */}
                       <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       {workspaces.map((ws) => (
                         <DropdownMenuItem key={ws.id} onClick={() => onWorkspaceSelected(ws.id)}>
                           {ws.name}
+                          {currentWorkspace?.id === ws.id && <Check className="ml-auto h-4 w-4" />}
                         </DropdownMenuItem>
                       ))}
                        <DropdownMenuSeparator />
                        <DropdownMenuItem onClick={() => setIsWorkspaceDialogOpen(true)}>
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Create Workspace
+                        Create New Workspace
                       </DropdownMenuItem>
+                      {currentWorkspace && isOwner && ( // Only show if a workspace is selected AND user is owner
+                        <DropdownMenuItem onClick={onManageMembers}>
+                          <Users className="mr-2 h-4 w-4" />
+                          Manage Members
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
               )}
@@ -127,7 +138,7 @@ export const AppHeader = ({
         <WorkspaceDialog 
           isOpen={isWorkspaceDialogOpen} 
           onOpenChange={setIsWorkspaceDialogOpen}
-          onWorkspaceCreated={onWorkspaceCreated} // Pass the callback
+          onWorkspaceCreated={onWorkspaceCreated} 
         />
       )}
     </header>

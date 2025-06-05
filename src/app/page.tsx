@@ -12,11 +12,12 @@ import { GanttChartView } from "@/components/GanttChartView";
 import { TableView } from "@/components/TableView";
 import { ObjectiveDialog } from "@/components/ObjectiveDialog";
 import { TaskDialog } from "@/components/TaskDialog";
+import { ManageMembersDialog } from "@/components/ManageMembersDialog"; // Added
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutGrid, BarChartHorizontalBig, Loader2, ListTree } from "lucide-react";
+import { LayoutGrid, BarChartHorizontalBig, Loader2, ListTree, Users } from "lucide-react"; // Added Users
 import { getInitialData, updateTaskStatusAction, updateObjectiveAction, updateTaskAction, createWorkspaceAction } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
+
 
 export default function Home() {
   const { user, isLoading: authIsLoading, logout } = useAuth();
@@ -34,40 +35,40 @@ export default function Home() {
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [currentObjectiveIdForTask, setCurrentObjectiveIdForTask] = useState<string | null>(null);
+  
+  const [isManageMembersDialogOpen, setIsManageMembersDialogOpen] = useState(false); // Added
 
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 
   const processRawObjective = useCallback((rawObj: Objective): Objective => {
     return {
       ...rawObj,
-      userId: rawObj.userId || user?.id, // Assign current user if not present
-      workspaceId: rawObj.workspaceId || currentWorkspace?.id, // Assign current workspace
+      userId: rawObj.userId || user?.id, 
+      workspaceId: rawObj.workspaceId || currentWorkspace?.id, 
       tasks: rawObj.tasks.map(task => ({
         ...task,
         dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
         createdAt: new Date(task.createdAt),
+        // Assignee details are now populated by backend if assigneeId exists
       })),
     };
   }, [user?.id, currentWorkspace?.id]);
 
   const loadData = useCallback(async () => {
-    if (!user) return; // Don't load if no user
+    if (!user) return; 
     setIsLoadingData(true);
     try {
-      // In a real app, getInitialData would be scoped by user/workspace
-      const data = await getInitialData(user.id); // Pass userId for potential future filtering
-      setWorkspaces(data.workspaces.map(ws => ({...ws, ownerId: ws.ownerId || user.id }))); // Ensure ownerId
+      const data = await getInitialData(user.id); 
+      setWorkspaces(data.workspaces.map(ws => ({...ws, ownerId: ws.ownerId || user.id, memberIds: ws.memberIds || [user.id] })));
       
-      // Set current workspace (e.g., first one, or last used from localStorage)
       if (data.workspaces.length > 0) {
         const lastSelectedWorkspaceId = localStorage.getItem("tasktracker-lastWorkspace");
         const foundWorkspace = data.workspaces.find(ws => ws.id === lastSelectedWorkspaceId);
         setCurrentWorkspace(foundWorkspace || data.workspaces[0]);
       } else {
-        setCurrentWorkspace(null);
+        setCurrentWorkspace(null); // No workspaces, or default one was just created
       }
 
-      // Objectives will be filtered by currentWorkspace below
       setObjectives(data.objectives.map(processRawObjective));
     } catch (error) {
       toast({ title: "Error", description: "Failed to load data.", variant: "destructive" });
@@ -105,8 +106,11 @@ export default function Home() {
     setIsObjectiveDialogOpen(true);
   };
   
-  const handleObjectiveSaved = (savedObjective: Objective) => {
-    // Ensure workspaceId is set from currentWorkspace
+  const handleObjectiveSaved = (savedObjective: Objective | { error: string }) => {
+     if ("error" in savedObjective) {
+      toast({ title: "Error", description: savedObjective.error, variant: "destructive" });
+      return;
+    }
     const objectiveWithWorkspace = {
       ...savedObjective,
       workspaceId: savedObjective.workspaceId || currentWorkspace?.id,
@@ -129,7 +133,7 @@ export default function Home() {
   };
 
   const handleTaskSaved = (savedTask: Task) => {
-    const processedSavedTask = {
+     const processedSavedTask = {
       ...savedTask,
       dueDate: savedTask.dueDate ? new Date(savedTask.dueDate) : undefined,
       createdAt: new Date(savedTask.createdAt),
@@ -138,9 +142,12 @@ export default function Home() {
     setObjectives(prevObjectives =>
       prevObjectives.map(obj => {
         if (obj.id === processedSavedTask.objectiveId) {
+          const taskExists = obj.tasks.some(t => t.id === processedSavedTask.id);
           return {
             ...obj,
-            tasks: obj.tasks.map(t => t.id === processedSavedTask.id ? processedSavedTask : t),
+            tasks: taskExists 
+                    ? obj.tasks.map(t => t.id === processedSavedTask.id ? processedSavedTask : t)
+                    : [...obj.tasks, processedSavedTask], // Add if new (though this dialog is for edit)
           };
         }
         return obj;
@@ -153,7 +160,7 @@ export default function Home() {
 
   const handleTaskStatusChange = async (taskId: string, newStatus: TaskStatus, oldStatus: TaskStatus, objectiveId: string) => {
     if (newStatus === oldStatus) return;
-    const originalObjectives = JSON.parse(JSON.stringify(objectives));
+    const originalObjectives = JSON.parse(JSON.stringify(objectives)); // Deep copy for rollback
 
     setObjectives(prevObjectives =>
       prevObjectives.map(obj =>
@@ -170,10 +177,23 @@ export default function Home() {
 
     try {
       const result = await updateTaskStatusAction(taskId, newStatus, objectiveId);
-      if (!result.success) {
+      if (!result.success || !result.task) {
         setObjectives(originalObjectives.map(processRawObjective)); 
-        toast({ title: "Update Failed", description: "Could not update task status.", variant: "destructive" });
+        toast({ title: "Update Failed", description: result.error || "Could not update task status.", variant: "destructive" });
       } else {
+         // Update the specific task with the result from the server to get populated assignee details
+        setObjectives(prevObjectives =>
+          prevObjectives.map(obj =>
+            obj.id === objectiveId
+              ? {
+                  ...obj,
+                  tasks: obj.tasks.map(t =>
+                    t.id === taskId ? { ...processRawObjective({tasks:[]}).tasks[0], ...result.task } : t // Bit of a hack to process single task
+                  ),
+                }
+              : obj
+          )
+        );
         toast({ title: "Task Updated", description: `Task moved to ${newStatus}.` });
       }
     } catch (error) {
@@ -199,19 +219,26 @@ export default function Home() {
     }
   };
 
-  const handleWorkspaceCreated = async (newWorkspaceName: string) => {
-    if (!user) return; // Should not happen if this dialog is open
-    const result = await createWorkspaceAction(newWorkspaceName, user.id);
-    if ("error" in result) {
-      toast({ title: "Error", description: result.error, variant: "destructive" });
-    } else {
-      setWorkspaces(prev => [...prev, result]);
-      setCurrentWorkspace(result); // Select the newly created workspace
-      toast({ title: "Workspace Created", description: `Workspace "${result.name}" added.` });
-      return result; // Return the created workspace
-    }
-    return undefined;
+  const handleWorkspaceCreated = (newWs: Workspace) => {
+    setWorkspaces(prev => [...prev, newWs]);
+    setCurrentWorkspace(newWs);
   };
+
+  const handleOpenManageMembers = () => {
+    if (!currentWorkspace) {
+      toast({ title: "No Workspace Selected", description: "Please select a workspace to manage its members.", variant: "default"});
+      return;
+    }
+    setIsManageMembersDialogOpen(true);
+  };
+  
+  const handleMembersChanged = (updatedWorkspace: Workspace) => {
+    setWorkspaces(prev => prev.map(ws => ws.id === updatedWorkspace.id ? updatedWorkspace : ws));
+    if (currentWorkspace?.id === updatedWorkspace.id) {
+      setCurrentWorkspace(updatedWorkspace);
+    }
+  };
+
 
   const filteredObjectives = objectives.filter(obj => obj.workspaceId === currentWorkspace?.id);
 
@@ -231,7 +258,8 @@ export default function Home() {
           workspaces={workspaces}
           currentWorkspace={currentWorkspace || undefined}
           onWorkspaceSelected={handleWorkspaceSelected}
-          onWorkspaceCreated={(ws) => { /* WorkspaceDialog handles this directly now */ }}
+          onWorkspaceCreated={handleWorkspaceCreated}
+          onManageMembers={handleOpenManageMembers} // Added
         />
         <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-accent" />
@@ -247,10 +275,8 @@ export default function Home() {
         workspaces={workspaces}
         currentWorkspace={currentWorkspace || undefined}
         onWorkspaceSelected={handleWorkspaceSelected}
-        onWorkspaceCreated={(newWs) => { // This callback is for AppHeader if it needs to react
-            setWorkspaces(prev => [...prev, newWs]);
-            setCurrentWorkspace(newWs);
-        }}
+        onWorkspaceCreated={handleWorkspaceCreated}
+        onManageMembers={handleOpenManageMembers} // Added
       />
       <main className="flex-grow container mx-auto px-4 py-8">
         {!currentWorkspace && workspaces.length > 0 && (
@@ -263,7 +289,6 @@ export default function Home() {
            <div className="text-center py-10 bg-card p-6 rounded-lg shadow-md">
             <h2 className="text-2xl font-semibold mb-3">Welcome, {user?.email}!</h2>
             <p className="text-muted-foreground mb-4">Create your first workspace to begin organizing your objectives.</p>
-            {/* Button to open WorkspaceDialog can be added here if AppHeader's isn't sufficient */}
           </div>
         )}
 
@@ -308,19 +333,27 @@ export default function Home() {
           onOpenChange={setIsObjectiveDialogOpen}
           onObjectiveSaved={handleObjectiveSaved}
           objectiveToEdit={editingObjective}
-          // Pass workspaceId and userId to the dialog if it's adapted to use them
-          // For now, they are added in processRawObjective and handleObjectiveSaved
           currentWorkspaceId={currentWorkspace?.id}
           currentUserId={user?.id}
         />
       )}
-      {editingTask && currentObjectiveIdForTask && (
+      {editingTask && currentObjectiveIdForTask && currentWorkspace && ( // Ensure currentWorkspace is available
         <TaskDialog
           isOpen={isTaskDialogOpen}
           onOpenChange={setIsTaskDialogOpen}
           task={editingTask}
           objectiveId={currentObjectiveIdForTask}
           onTaskSaved={handleTaskSaved}
+          currentWorkspaceId={currentWorkspace.id} // Pass workspace ID
+        />
+      )}
+      {currentWorkspace && user && ( // Added conditional rendering for ManageMembersDialog
+         <ManageMembersDialog
+          isOpen={isManageMembersDialogOpen}
+          onOpenChange={setIsManageMembersDialogOpen}
+          workspace={currentWorkspace}
+          currentUserId={user.id}
+          onMembersChanged={handleMembersChanged}
         />
       )}
     </div>
