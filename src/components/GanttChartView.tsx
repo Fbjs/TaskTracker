@@ -21,7 +21,7 @@ const calculateTaskEnd = (task: Task): Date => {
   if (task.dueDate) return task.dueDate instanceof Date ? task.dueDate : parseISO(task.dueDate as unknown as string);
   const taskStart = calculateTaskStart(task);
   // Default to 7 days after start/creation if no due date
-  return addDays(taskStart, 7); 
+  return addDays(taskStart, 7);
 };
 
 export const GanttChartView = ({ objectives }: GanttChartViewProps) => {
@@ -46,12 +46,12 @@ export const GanttChartView = ({ objectives }: GanttChartViewProps) => {
         }
 
         const objectiveTasks: GanttTask[] = objective.tasks.map(task => ({
-          ...task, // Spread existing task properties
+          ...task, 
           name: task.description,
-          start: calculateTaskStart(task), // Use helper for start date
-          end: calculateTaskEnd(task),   // Use helper for end date
+          start: calculateTaskStart(task),
+          end: calculateTaskEnd(task),
         }));
-        
+
         const allObjectiveDates = objectiveTasks.flatMap(task => [task.start, task.end]);
         if (allObjectiveDates.some(d => !(d instanceof Date) || isNaN(d.getTime()))) {
           console.error("Invalid dates found in tasks for objective:", objective.description, objectiveTasks);
@@ -65,39 +65,39 @@ export const GanttChartView = ({ objectives }: GanttChartViewProps) => {
 
         const objectiveMinDate = min(allObjectiveDates);
         let objectiveMaxDate = max(allObjectiveDates);
-        
-        // Ensure minDate and maxDate are different if all tasks have same start/end
+
         if (differenceInDays(objectiveMaxDate, objectiveMinDate) === 0) {
           objectiveMaxDate = addDays(objectiveMaxDate, 1);
         }
-        
+
         const chartData = objectiveTasks.map((task, taskIndex) => {
           const startOffset = differenceInDays(task.start, objectiveMinDate);
           const endOffset = differenceInDays(task.end, objectiveMinDate);
+          const duration = Math.max(0, endOffset - startOffset); // Ensure duration is not negative
+
           return {
             taskName: task.name,
-            // Ensure timeRange values are always non-negative and end >= start
-            timeRange: [startOffset, Math.max(startOffset, endOffset)], 
+            ganttOffset: startOffset,    // Offset from objectiveMinDate to task start
+            ganttDuration: duration,     // Duration of the task
             id: task.id,
             colorIndex: taskIndex % GANTT_COLORS.length,
-            originalTask: task, 
+            originalTask: task,
           };
         });
-        
-        const yAxisWidth = Math.max(150, ...chartData.map(d => d.taskName.length * 6)); 
 
+        const yAxisWidth = Math.max(150, ...chartData.map(d => d.taskName.length * 7)); // Adjusted width calculation
 
         return (
           <Card key={objective.id} className="shadow-lg">
             <CardHeader>
               <CardTitle className="font-headline">{objective.description}</CardTitle>
             </CardHeader>
-            <CardContent className="h-[300px] pt-6"> 
+            <CardContent className="h-[300px] pt-6">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={chartData}
                   layout="vertical"
-                  margin={{ top: 5, right: 30, left: yAxisWidth + 10, bottom: 20 }}
+                  margin={{ top: 5, right: 30, left: yAxisWidth - 100, bottom: 20 }} // Adjusted left margin
                   barCategoryGap="30%"
                 >
                   <CartesianGrid strokeDasharray="3 3" />
@@ -116,14 +116,19 @@ export const GanttChartView = ({ objectives }: GanttChartViewProps) => {
                     interval={0}
                   />
                   <Tooltip
-                    formatter={(value: [number, number], name, props) => {
+                    formatter={(value, name, props) => { // value is ganttDuration or ganttOffset
                       const task = props.payload.originalTask as GanttTask | undefined;
                       if (!task || !task.start || !task.end) return ["Invalid data", ""];
-                      const duration = differenceInDays(task.end, task.start);
-                      return [
-                        `${format(task.start, 'MMM d')} - ${format(task.end, 'MMM d')}`,
-                        `Duration: ${Math.max(0,duration)} days` 
-                      ];
+                      
+                      // Only format for the visible bar (ganttDuration)
+                      if (name === "Task Duration") {
+                        const durationInDays = differenceInDays(task.end, task.start);
+                        return [
+                          `${format(task.start, 'MMM d')} - ${format(task.end, 'MMM d')}`,
+                          `Duration: ${Math.max(0, durationInDays)} days`
+                        ];
+                      }
+                      return null; // Don't show tooltip for the transparent offset bar
                     }}
                     labelFormatter={(label, payload) => {
                        const task = payload?.[0]?.payload?.originalTask as GanttTask | undefined;
@@ -131,7 +136,8 @@ export const GanttChartView = ({ objectives }: GanttChartViewProps) => {
                     }}
                   />
                   <Legend wrapperStyle={{paddingTop: '10px'}}/>
-                  <Bar dataKey="timeRange" name="Task Duration">
+                  <Bar dataKey="ganttOffset" stackId="a" fill="transparent" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="ganttDuration" stackId="a" name="Task Duration" radius={[3, 3, 0, 0]}>
                     {chartData.map((entry) => (
                       <Cell key={`cell-${entry.id}`} fill={GANTT_COLORS[entry.colorIndex]} />
                     ))}
