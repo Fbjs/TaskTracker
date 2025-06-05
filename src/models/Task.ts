@@ -8,8 +8,9 @@ export interface ITask extends Document {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  startDate?: Date; // Added startDate
   dueDate?: Date;
-  assigneeId?: IUser['_id']; // Changed from assignee: string
+  assigneeId?: IUser['_id']; 
   objectiveId: IObjective['_id'];
 }
 
@@ -31,10 +32,13 @@ const TaskSchema: Schema<ITask> = new Schema({
     default: 'Medium',
     required: true,
   },
+  startDate: { // Added startDate field
+    type: Date,
+  },
   dueDate: {
     type: Date,
   },
-  assigneeId: { // Changed from assignee
+  assigneeId: { 
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: false, 
@@ -44,7 +48,7 @@ const TaskSchema: Schema<ITask> = new Schema({
     ref: 'Objective',
     required: true,
   },
-}, { timestamps: true });
+}, { timestamps: true }); // createdAt and updatedAt are automatically managed
 
 const Task: Model<ITask> = models.Task || mongoose.model<ITask>('Task', TaskSchema);
 

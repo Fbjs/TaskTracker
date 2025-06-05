@@ -19,7 +19,7 @@ import mongoose from "mongoose";
 const SALT_ROUNDS = 10;
 
 // Helper to convert Mongoose document to a plain object compatible with frontend types
-function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: any, password?: string, memberIds?: any[], tasks?: any[], assigneeId?: any }>(doc: any): Omit<T, 'password'> {
+function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: any, password?: string, memberIds?: any[], tasks?: any[], assigneeId?: any, startDate?: any, dueDate?: any }>(doc: any): Omit<T, 'password'> {
   if (!doc) return null as unknown as Omit<T, 'password'>;
   const plainObject = doc.toObject ? doc.toObject({ getters: true, versionKey: false }) : { ...doc };
 
@@ -32,6 +32,9 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
   }
   if (plainObject.updatedAt && typeof plainObject.updatedAt === 'string') {
     plainObject.updatedAt = new Date(plainObject.updatedAt);
+  }
+  if (plainObject.startDate && typeof plainObject.startDate === 'string') {
+    plainObject.startDate = new Date(plainObject.startDate);
   }
   if (plainObject.dueDate && typeof plainObject.dueDate === 'string') {
     plainObject.dueDate = new Date(plainObject.dueDate);
@@ -318,7 +321,7 @@ export async function handleSuggestTasks(objectivePrompt: string): Promise<AISug
 
 export async function addObjectiveAction(
   description: string,
-  tasksData: { description: string; assigneeId?: string }[],
+  tasksData: { description: string; assigneeId?: string; startDate?: Date; dueDate?: Date }[], // Added startDate, dueDate
   userId?: string,
   workspaceId?: string
 ): Promise<Objective | { error: string }> {
@@ -356,6 +359,8 @@ export async function addObjectiveAction(
                 return {
                     description: taskInput.description,
                     assigneeId: taskInput.assigneeId ? new mongoose.Types.ObjectId(taskInput.assigneeId) : undefined,
+                    startDate: taskInput.startDate ? new Date(taskInput.startDate) : undefined,
+                    dueDate: taskInput.dueDate ? new Date(taskInput.dueDate) : undefined,
                     status: "To Do" as TaskStatus,
                     priority: "Medium" as TaskPriority,
                     objectiveId: newObjectiveDoc!._id, 
@@ -379,7 +384,6 @@ export async function addObjectiveAction(
 
     revalidatePath("/");
     if (!populatedObjectiveDoc) {
-        // This case should ideally not happen if creation was successful
         const fallbackObjective = await ObjectiveCollection.findById(newObjectiveDoc._id).lean();
         if (fallbackObjective) return serializeDocument<IObjective>(fallbackObjective) as Objective;
         return { error: "Failed to retrieve the newly created objective with tasks."};
@@ -388,7 +392,7 @@ export async function addObjectiveAction(
     return serializeDocument<IObjective>(populatedObjectiveDoc) as Objective;
 
   } catch (error: any) {
-     if (newObjectiveDoc && !newObjectiveDoc.isNew) { // If objective was created but tasks failed, try to return it
+     if (newObjectiveDoc && !newObjectiveDoc.isNew) { 
         const fallbackObjective = await ObjectiveCollection.findById(newObjectiveDoc._id)
           .populate<{ tasks: ITask[] }>({
               path: 'tasks',
@@ -404,9 +408,9 @@ export async function addObjectiveAction(
 export async function updateObjectiveAction(
   objectiveId: string, 
   newDescription: string,
-  newTasksData: { description: string; assigneeId?: string }[] = [],
+  newTasksData: { description: string; assigneeId?: string; startDate?: Date; dueDate?: Date }[] = [], // Added startDate, dueDate
   tasksToDeleteIds: string[] = [],
-  tasksToUpdateData: { id: string; description?: string; assigneeId?: string | null }[] = []
+  tasksToUpdateData: { id: string; description?: string; assigneeId?: string | null; startDate?: Date | null; dueDate?: Date | null }[] = [] // Added startDate, dueDate
 ): Promise<Objective | { error: string }> {
   await dbConnect();
   if (!objectiveId) return { error: "Objective ID is required." };
@@ -434,13 +438,26 @@ export async function updateObjectiveAction(
         const taskToUpdate = await TaskCollection.findById(taskUpdate.id);
         if (taskToUpdate && taskToUpdate.objectiveId.toString() === objectiveId) {
           if (taskUpdate.description) taskToUpdate.description = taskUpdate.description;
-          if (taskUpdate.assigneeId === null) { // Unassign
+          
+          if (taskUpdate.assigneeId === null) { 
             taskToUpdate.assigneeId = undefined;
-          } else if (taskUpdate.assigneeId) { // Assign/Reassign
+          } else if (taskUpdate.assigneeId) { 
             if (!workspace.memberIds.map(id => id.toString()).includes(taskUpdate.assigneeId)) {
               throw new Error(`Cannot assign task ${taskUpdate.description || taskToUpdate.description}: User ${taskUpdate.assigneeId} is not a member of the workspace.`);
             }
             taskToUpdate.assigneeId = new mongoose.Types.ObjectId(taskUpdate.assigneeId);
+          }
+
+          if (taskUpdate.startDate === null) {
+            taskToUpdate.startDate = undefined;
+          } else if (taskUpdate.startDate) {
+            taskToUpdate.startDate = new Date(taskUpdate.startDate);
+          }
+
+          if (taskUpdate.dueDate === null) {
+            taskToUpdate.dueDate = undefined;
+          } else if (taskUpdate.dueDate) {
+            taskToUpdate.dueDate = new Date(taskUpdate.dueDate);
           }
           await taskToUpdate.save();
         }
@@ -458,6 +475,8 @@ export async function updateObjectiveAction(
                 return {
                     description: taskInput.description,
                     assigneeId: taskInput.assigneeId ? new mongoose.Types.ObjectId(taskInput.assigneeId) : undefined,
+                    startDate: taskInput.startDate ? new Date(taskInput.startDate) : undefined,
+                    dueDate: taskInput.dueDate ? new Date(taskInput.dueDate) : undefined,
                     status: "To Do" as TaskStatus,
                     priority: "Medium" as TaskPriority,
                     objectiveId: objective._id, 
@@ -521,16 +540,25 @@ export async function updateTaskAction(
   await dbConnect();
   if (!taskId) return { error: "Task ID is required." };
 
-  const { objectiveId: _, assignee, ...validUpdates } = updates; 
+  const { objectiveId: _, assignee, ...rawUpdates } = updates; 
   
+  // Explicitly cast to 'any' to handle potentially undefined fields before they are set
+  const validUpdates: any = {...rawUpdates};
+
+  if (validUpdates.startDate === null) { 
+    validUpdates.startDate = undefined; 
+  } else if (validUpdates.startDate) {
+    validUpdates.startDate = new Date(validUpdates.startDate);
+  }
+
   if (validUpdates.dueDate === null) { 
-    (validUpdates as any).dueDate = undefined; 
+    validUpdates.dueDate = undefined; 
   } else if (validUpdates.dueDate) {
-    (validUpdates as any).dueDate = new Date(validUpdates.dueDate);
+    validUpdates.dueDate = new Date(validUpdates.dueDate);
   }
 
   if (validUpdates.assigneeId === null) {
-    (validUpdates as any).assigneeId = undefined; 
+    validUpdates.assigneeId = undefined; 
   } else if (typeof validUpdates.assigneeId === 'string' && validUpdates.assigneeId.trim() !== "") {
      const taskDocForWorkspaceCheck = await TaskCollection.findById(taskId).populate({
         path: 'objectiveId',
@@ -547,7 +575,7 @@ export async function updateTaskAction(
              if (!workspace.memberIds.map(id => id.toString()).includes(validUpdates.assigneeId)) {
                  return { error: "Assignee is not a member of this workspace." };
              }
-             (validUpdates as any).assigneeId = new mongoose.Types.ObjectId(validUpdates.assigneeId);
+             validUpdates.assigneeId = new mongoose.Types.ObjectId(validUpdates.assigneeId);
          } else {
             return { error: "Could not verify workspace membership for assignee. Workspace details missing or not populated correctly."};
          }
@@ -555,15 +583,14 @@ export async function updateTaskAction(
         return { error: "Could not find task or objective to verify assignee. Task or objective might not exist or lacks workspace information."};
      }
   } else if (validUpdates.assigneeId === undefined) {
-      // If assigneeId is explicitly undefined in updates, don't try to process it as an ObjectId
-      delete (validUpdates as any).assigneeId; // Remove it so Mongoose doesn't try to cast undefined
+      delete validUpdates.assigneeId; 
   }
 
 
   try {
     const updatedTaskDoc = await TaskCollection.findByIdAndUpdate(
       taskId,
-      { $set: validUpdates }, // Use $set to ensure only provided fields are updated
+      { $set: validUpdates }, 
       { new: true, runValidators: true }
     ).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
 
@@ -579,4 +606,3 @@ export async function updateTaskAction(
     return { error: "Failed to update task. " + error.message };
   }
 }
-

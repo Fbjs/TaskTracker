@@ -17,7 +17,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, PlusCircle, Trash2, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Added
+import { Calendar } from "@/components/ui/calendar"; // Added
+import { Sparkles, PlusCircle, Trash2, Loader2, CalendarIcon } from "lucide-react"; // Added CalendarIcon
+import { format } from "date-fns"; // Added
 import { useToast } from "@/hooks/use-toast";
 import { handleSuggestTasks, addObjectiveAction, updateObjectiveAction, getWorkspaceMembersAction } from "@/app/actions";
 
@@ -35,6 +38,8 @@ interface EditableTask {
   id?: string; 
   description: string;
   assigneeId?: string;
+  startDate?: Date; // Added
+  dueDate?: Date;   // Added
   isNew?: boolean; 
   isDeleted?: boolean; 
 }
@@ -58,22 +63,20 @@ export const ObjectiveDialog = ({
 
   const isEditMode = !!objectiveToEdit;
 
-  const generateTempId = () => {
+  const generateTempId = useCallback(() => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
     }
-    // Fallback for environments where crypto.randomUUID is not available
-    // or crypto itself is not defined (e.g. very old Node or specific JS engines)
     let d = new Date().getTime();
     if (typeof performance !== 'undefined' && typeof performance.now === 'function'){
-      d += performance.now(); //use high-precision timer if available
+      d += performance.now(); 
     }
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = (d + Math.random()*16)%16 | 0;
       d = Math.floor(d/16);
       return (c === 'x' ? r : (r&0x3|0x8)).toString(16);
     });
-  };
+  }, []);
 
   const resetDialogState = useCallback(() => {
     if (isEditMode && objectiveToEdit) {
@@ -84,6 +87,8 @@ export const ObjectiveDialog = ({
           id: task.id,
           description: task.description,
           assigneeId: task.assigneeId || undefined,
+          startDate: task.startDate ? new Date(task.startDate) : undefined,
+          dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
           isNew: false,
           isDeleted: false,
         }))
@@ -91,12 +96,12 @@ export const ObjectiveDialog = ({
       setAiPrompt("");
     } else {
       setObjectiveDescription("");
-      setTasks([{ tempId: generateTempId(), description: "", isNew: true, isDeleted: false }]);
+      setTasks([{ tempId: generateTempId(), description: "", isNew: true, isDeleted: false, startDate: undefined, dueDate: undefined }]);
       setAiPrompt("");
     }
     setIsAiLoading(false);
     setIsSubmitting(false);
-  }, [isEditMode, objectiveToEdit]);
+  }, [isEditMode, objectiveToEdit, generateTempId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -142,6 +147,8 @@ export const ObjectiveDialog = ({
         tempId: generateTempId(), 
         description: task.taskDescription, 
         assigneeId: undefined, 
+        startDate: undefined,
+        dueDate: undefined,
         isNew: true, 
         isDeleted: false 
       })));
@@ -149,7 +156,7 @@ export const ObjectiveDialog = ({
     }
   };
 
-  const handleTaskChange = (taskTempId: string, field: keyof Omit<EditableTask, 'tempId' | 'id'>, value: string | boolean | undefined) => {
+  const handleTaskChange = (taskTempId: string, field: keyof Omit<EditableTask, 'tempId' | 'id'>, value: string | boolean | Date | undefined) => {
     setTasks(currentTasks =>
       currentTasks.map(task =>
         task.tempId === taskTempId ? { ...task, [field]: value } : task
@@ -160,7 +167,7 @@ export const ObjectiveDialog = ({
   const handleAddTask = () => {
     setTasks(currentTasks => [
       ...currentTasks, 
-      { tempId: generateTempId(), description: "", isNew: true, isDeleted: false }
+      { tempId: generateTempId(), description: "", isNew: true, isDeleted: false, startDate: undefined, dueDate: undefined }
     ]);
   };
 
@@ -188,9 +195,9 @@ export const ObjectiveDialog = ({
 
     const activeTasks = tasks.filter(task => !task.isDeleted);
     if (activeTasks.length > 0 && activeTasks.some(task => !task.description.trim())) {
-      const allEmptyAndNew = activeTasks.every(task => !task.description.trim() && task.isNew && !task.assigneeId);
+      const allEmptyAndNew = activeTasks.every(task => !task.description.trim() && task.isNew && !task.assigneeId && !task.startDate && !task.dueDate);
       if (activeTasks.length === 1 && allEmptyAndNew) {
-        // Allow submitting with a single, untouched, new, empty task (it will be filtered out by the backend logic too)
+        // Allow submitting with a single, untouched, new, empty task
       } else {
         toast({ title: "Validation Error", description: "All active task descriptions must be filled.", variant: "destructive" });
         return;
@@ -208,7 +215,12 @@ export const ObjectiveDialog = ({
       if (isEditMode && objectiveToEdit) {
         const newTasksData = tasks
           .filter(t => t.isNew && !t.isDeleted && t.description.trim() !== "")
-          .map(t => ({ description: t.description, assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId }));
+          .map(t => ({ 
+            description: t.description, 
+            assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId,
+            startDate: t.startDate,
+            dueDate: t.dueDate,
+           }));
         
         const tasksToDeleteIds = tasks
           .filter(t => !t.isNew && t.isDeleted && t.id)
@@ -217,12 +229,16 @@ export const ObjectiveDialog = ({
         const tasksToUpdateData = tasks
           .filter(t => !t.isNew && !t.isDeleted && t.id && (
             t.description !== objectiveToEdit.tasks.find(ot => ot.id === t.id)?.description ||
-            (t.assigneeId || undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.assigneeId || undefined)
+            (t.assigneeId || undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.assigneeId || undefined) ||
+            (t.startDate ? new Date(t.startDate).toISOString() : undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.startDate ? new Date(objectiveToEdit.tasks.find(ot => ot.id === t.id)!.startDate!).toISOString() : undefined) ||
+            (t.dueDate ? new Date(t.dueDate).toISOString() : undefined) !== (objectiveToEdit.tasks.find(ot => ot.id === t.id)?.dueDate ? new Date(objectiveToEdit.tasks.find(ot => ot.id === t.id)!.dueDate!).toISOString() : undefined)
           ))
           .map(t => ({
             id: t.id!,
             description: t.description,
-            assigneeId: t.assigneeId === "unassigned" ? null : (t.assigneeId || undefined) 
+            assigneeId: t.assigneeId === "unassigned" ? null : (t.assigneeId || undefined),
+            startDate: t.startDate || null,
+            dueDate: t.dueDate || null,
           }));
 
         result = await updateObjectiveAction(
@@ -236,7 +252,12 @@ export const ObjectiveDialog = ({
       } else { 
         const tasksToSubmit = tasks
           .filter(t => !t.isDeleted && t.description.trim() !== "")
-          .map(t => ({ description: t.description, assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId }));
+          .map(t => ({ 
+            description: t.description, 
+            assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId,
+            startDate: t.startDate,
+            dueDate: t.dueDate,
+          }));
 
         result = await addObjectiveAction(
           objectiveDescription,
@@ -268,7 +289,7 @@ export const ObjectiveDialog = ({
       }
       onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col"> {/* Increased width */}
         <DialogHeader>
           <DialogTitle className="font-headline">{isEditMode ? "Edit Objective" : "Add New Objective"}</DialogTitle>
           {!isEditMode && (
@@ -310,7 +331,7 @@ export const ObjectiveDialog = ({
 
             <div>
               <Label className="font-semibold">Tasks</Label>
-              <div className="mt-1 max-h-[250px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10">
+              <div className="mt-1 max-h-[300px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10"> {/* Increased max-h */}
                 {tasks.map((task) => (
                   (!task.isDeleted || (task.isDeleted && !task.isNew)) && ( 
                   <div 
@@ -330,13 +351,65 @@ export const ObjectiveDialog = ({
                         {task.isDeleted && !task.isNew ? <PlusCircle className="h-4 w-4 text-green-600" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                       </Button>
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                        <div>
+                            <Label htmlFor={`task-start-date-${task.tempId}`} className="text-xs">Start Date</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant={"outline"}
+                                  className="w-full justify-start text-left font-normal text-xs h-9 mt-0.5"
+                                  id={`task-start-date-${task.tempId}`}
+                                  disabled={(task.isDeleted && !task.isNew)}
+                                >
+                                  <CalendarIcon className="mr-1 h-3 w-3" />
+                                  {task.startDate ? format(task.startDate, "PPP") : <span>Pick start</span>}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={task.startDate}
+                                  onSelect={(date) => handleTaskChange(task.tempId, "startDate", date)}
+                                  initialFocus
+                                  disabled={(task.isDeleted && !task.isNew)}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div>
+                            <Label htmlFor={`task-due-date-${task.tempId}`} className="text-xs">Due Date</Label>
+                             <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant={"outline"}
+                                  className="w-full justify-start text-left font-normal text-xs h-9 mt-0.5"
+                                  id={`task-due-date-${task.tempId}`}
+                                  disabled={(task.isDeleted && !task.isNew)}
+                                >
+                                  <CalendarIcon className="mr-1 h-3 w-3" />
+                                  {task.dueDate ? format(task.dueDate, "PPP") : <span>Pick due</span>}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={task.dueDate}
+                                  onSelect={(date) => handleTaskChange(task.tempId, "dueDate", date)}
+                                  initialFocus
+                                  disabled={(date) => (task.isDeleted && !task.isNew) || (task.startDate && date < task.startDate) || false }
+                                />
+                              </PopoverContent>
+                            </Popover>
+                        </div>
+                    </div>
                      <Select
                         value={task.assigneeId || "unassigned"}
-                        onValueChange={(value: string) => handleTaskChange(task.tempId, "assigneeId", value)}
+                        onValueChange={(value: string) => handleTaskChange(task.tempId, "assigneeId", value === "unassigned" ? undefined : value)}
                         disabled={isLoadingMembers || (task.isDeleted && !task.isNew)}
                       >
-                      <SelectTrigger className="mt-1">
-                         <SelectValue placeholder={isLoadingMembers ? "Loading members..." : "Assign to (optional)"} />
+                      <SelectTrigger className="mt-1 h-9 text-xs">
+                         <SelectValue placeholder={isLoadingMembers ? "Loading..." : "Assign to"} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="unassigned">Unassigned</SelectItem>
@@ -371,5 +444,3 @@ export const ObjectiveDialog = ({
     </Dialog>
   );
 };
-
-    

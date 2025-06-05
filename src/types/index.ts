@@ -23,6 +23,7 @@ export interface Task {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  startDate?: Date; // Added startDate
   dueDate?: Date;
   createdAt: Date;
   assigneeId?: string; // ID of the assigned user
@@ -48,7 +49,7 @@ export interface AISuggestions {
   tasks: SuggestedTask[];
 }
 
-export interface GanttTask extends Task {
+export interface GanttTask extends Task { // GanttTask already uses `start` and `end` which is fine
   name: string;
   start: Date;
   end: Date;

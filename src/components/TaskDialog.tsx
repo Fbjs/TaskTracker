@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { Task, TaskStatus, TaskPriority, User, Workspace } from "@/types"; 
+import type { Task, TaskStatus, TaskPriority, User } from "@/types"; 
 import { ALL_TASK_STATUSES, ALL_TASK_PRIORITIES } from "@/types"; 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Loader2, Users } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react"; // Removed Users icon
 import { format } from "date-fns"; 
 import { useToast } from "@/hooks/use-toast";
 import { updateTaskAction, getWorkspaceMembersAction } from "@/app/actions";
@@ -30,7 +30,7 @@ interface TaskDialogProps {
   task: Task;
   objectiveId: string;
   onTaskSaved: (updatedTask: Task) => void;
-  currentWorkspaceId?: string; // Added to fetch members
+  currentWorkspaceId?: string; 
 }
 
 export const TaskDialog = ({ 
@@ -44,8 +44,9 @@ export const TaskDialog = ({
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("To Do");
   const [priority, setPriority] = useState<TaskPriority>("Medium");
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined); // Added startDate state
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
-  const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined); // Stores User ID
+  const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
@@ -56,6 +57,7 @@ export const TaskDialog = ({
       setDescription(task.description);
       setStatus(task.status);
       setPriority(task.priority);
+      setStartDate(task.startDate ? new Date(task.startDate) : undefined); // Set startDate from task
       setDueDate(task.dueDate ? new Date(task.dueDate) : undefined);
       setAssigneeId(task.assigneeId || undefined);
       setIsSubmitting(false);
@@ -94,15 +96,16 @@ export const TaskDialog = ({
         description,
         status,
         priority,
-        dueDate,
-        assigneeId: assigneeId || null, // Send null to unassign
+        startDate: startDate || null, // Send null if undefined to clear it
+        dueDate: dueDate || null, // Send null if undefined to clear it
+        assigneeId: assigneeId || null, 
       };
       
       const result = await updateTaskAction(task.id, objectiveId, updates);
       if ("error" in result) {
          toast({ title: "Error updating task", description: result.error, variant: "destructive" });
       } else {
-        onTaskSaved(result); // The result is already serialized by the action
+        onTaskSaved(result); 
         toast({ title: "Task Updated", description: `"${description}" has been successfully updated.` });
         onOpenChange(false);
       }
@@ -116,11 +119,11 @@ export const TaskDialog = ({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) {
-        setWorkspaceMembers([]); // Clear members when dialog closes
+        setWorkspaceMembers([]); 
       }
       onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px]"> {/* Increased width for more fields */}
         <DialogHeader>
           <DialogTitle className="font-headline">Edit Task</DialogTitle>
           <DialogDescription>
@@ -140,7 +143,7 @@ export const TaskDialog = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="task-status">Status</Label>
               <Select value={status} onValueChange={(value: TaskStatus) => setStatus(value)}>
@@ -169,7 +172,30 @@ export const TaskDialog = ({
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <Label htmlFor="task-start-date">Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className="w-full justify-start text-left font-normal mt-1"
+                      id="task-start-date"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={setStartDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+            </div>
             <div>
                 <Label htmlFor="task-due-date">Due Date</Label>
                 <Popover>
@@ -189,14 +215,16 @@ export const TaskDialog = ({
                       selected={dueDate}
                       onSelect={setDueDate}
                       initialFocus
+                      disabled={startDate ? { before: startDate } : undefined} // Disable dates before startDate
                     />
                   </PopoverContent>
                 </Popover>
             </div>
-            <div>
+          </div>
+           <div>
               <Label htmlFor="task-assignee">Assignee</Label>
                <Select 
-                  value={assigneeId} 
+                  value={assigneeId || "unassigned"} 
                   onValueChange={(value: string) => setAssigneeId(value === "unassigned" ? undefined : value)}
                   disabled={isLoadingMembers}
                 >
@@ -211,7 +239,6 @@ export const TaskDialog = ({
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
         </form>
         <DialogFooter>
