@@ -15,7 +15,7 @@ import { TaskDialog } from "@/components/TaskDialog";
 import { ManageMembersDialog } from "@/components/ManageMembersDialog"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LayoutGrid, BarChartHorizontalBig, Loader2, ListTree, Users } from "lucide-react"; 
-import { getInitialData, updateTaskStatusAction, addObjectiveAction, updateObjectiveAction, updateTaskAction, createWorkspaceAction } from "@/app/actions"; // Added addObjectiveAction
+import { getInitialData, updateTaskStatusAction, addObjectiveAction, updateObjectiveAction, updateTaskAction, createWorkspaceAction, archiveObjectiveAction } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -60,8 +60,8 @@ export default function Home() {
       ...rawObj,
       userId: rawObj.userId || user?.id, 
       workspaceId: rawObj.workspaceId || currentWorkspace?.id, 
-      priority: rawObj.priority || "Medium", // Default priority
-      isArchived: rawObj.isArchived || false, // Default isArchived
+      priority: rawObj.priority || "Medium", 
+      isArchived: rawObj.isArchived || false, 
       createdAt: rawObj.createdAt ? new Date(rawObj.createdAt) : new Date(),
       tasks: rawObj.tasks?.map(processSingleTask) || [],
     };
@@ -142,6 +142,28 @@ export default function Home() {
     }
     setIsObjectiveDialogOpen(false);
     setEditingObjective(null);
+  };
+
+  const handleArchiveObjective = async (objectiveId: string) => {
+    const originalObjectives = JSON.parse(JSON.stringify(objectives));
+    
+    setObjectives(prev => prev.map(obj => 
+      obj.id === objectiveId ? { ...obj, isArchived: true } : obj
+    ));
+
+    const result = await archiveObjectiveAction(objectiveId);
+    if ("error" in result) {
+      toast({ title: "Error al Archivar", description: result.error, variant: "destructive" });
+      setObjectives(originalObjectives.map(processRawObjective)); // Revert on error
+    } else {
+      toast({ title: "Objetivo Archivado", description: `El objetivo "${result.description}" ha sido archivado.` });
+      // No need to setObjectives again here if the filter is client-side and reactive
+      // as 'filteredAndSortedObjectives' will re-calculate.
+      // If 'loadData()' was called, it would re-fetch excluding archived, so that works too.
+      // For immediate UI update, we might need to explicitly filter out from local state
+      // or ensure the filter re-runs.
+      // The current `filteredAndSortedObjectives` should handle this as it filters `isArchived: false`.
+    }
   };
 
   const handleEditTaskClick = (task: Task, objectiveId: string) => {
@@ -262,7 +284,6 @@ export default function Home() {
       if (priorityComparison !== 0) {
         return priorityComparison;
       }
-      // Orden secundario por fecha de creación (más recientes primero)
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
@@ -340,6 +361,7 @@ export default function Home() {
                   draggingTaskId={draggingTaskId}
                   onEditObjective={handleEditObjectiveClick}
                   onEditTask={handleEditTaskClick}
+                  onArchiveObjective={handleArchiveObjective}
                 />
               </TabsContent>
               <TabsContent value="gantt">
@@ -384,3 +406,4 @@ export default function Home() {
     </div>
   );
 }
+

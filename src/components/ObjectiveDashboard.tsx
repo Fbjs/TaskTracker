@@ -9,9 +9,18 @@ interface ObjectiveDashboardProps {
   draggingTaskId: string | null;
   onEditObjective: (objective: Objective) => void;
   onEditTask: (task: Task, objectiveId: string) => void;
+  onArchiveObjective: (objectiveId: string) => void;
 }
 
-export const ObjectiveDashboard = ({ objectives, onTaskStatusChange, onTaskDragStart, draggingTaskId, onEditObjective, onEditTask }: ObjectiveDashboardProps) => {
+export const ObjectiveDashboard = ({ 
+  objectives, 
+  onTaskStatusChange, 
+  onTaskDragStart, 
+  draggingTaskId, 
+  onEditObjective, 
+  onEditTask,
+  onArchiveObjective 
+}: ObjectiveDashboardProps) => {
   if (objectives.length === 0) {
     return <p className="text-center text-muted-foreground py-10">Aún no hay objetivos creados. Haz clic en "Añadir Objetivo" para empezar.</p>;
   }
@@ -27,8 +36,10 @@ export const ObjectiveDashboard = ({ objectives, onTaskStatusChange, onTaskDragS
           draggingTaskId={draggingTaskId}
           onEditObjective={onEditObjective}
           onEditTask={onEditTask}
+          onArchiveObjective={onArchiveObjective}
         />
       ))}
     </div>
   );
 };
+

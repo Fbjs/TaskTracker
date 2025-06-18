@@ -4,7 +4,18 @@ import { KanbanColumn } from "./KanbanColumn";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
+import { Pencil, ShieldAlert, ShieldCheck, ShieldQuestion, Archive } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface KanbanBoardProps {
   objective: Objective;
@@ -13,6 +24,7 @@ interface KanbanBoardProps {
   draggingTaskId: string | null;
   onEditObjective: (objective: Objective) => void;
   onEditTask: (task: Task, objectiveId: string) => void;
+  onArchiveObjective: (objectiveId: string) => void;
 }
 
 const statuses: TaskStatus[] = ["To Do", "In Progress", "Blocked", "Done"];
@@ -36,7 +48,15 @@ const objectivePriorityColors: Record<ObjectivePriority, string> = {
 };
 
 
-export const KanbanBoard = ({ objective, onTaskStatusChange, onTaskDragStart, draggingTaskId, onEditObjective, onEditTask }: KanbanBoardProps) => {
+export const KanbanBoard = ({ 
+  objective, 
+  onTaskStatusChange, 
+  onTaskDragStart, 
+  draggingTaskId, 
+  onEditObjective, 
+  onEditTask,
+  onArchiveObjective
+}: KanbanBoardProps) => {
   const tasksByStatus = (status: TaskStatus) => {
     return objective.tasks.filter((task) => task.status === status);
   };
@@ -48,6 +68,10 @@ export const KanbanBoard = ({ objective, onTaskStatusChange, onTaskDragStart, dr
   };
 
   const PriorityIcon = ObjectivePriorityIcons[objective.priority || "Medium"];
+
+  const handleArchiveConfirm = () => {
+    onArchiveObjective(objective.id);
+  };
 
   return (
     <div className="p-4 mb-8 border rounded-lg shadow-lg bg-card">
@@ -65,9 +89,36 @@ export const KanbanBoard = ({ objective, onTaskStatusChange, onTaskDragStart, dr
               </Badge>
             )}
           </div>
-          <Button variant="ghost" size="icon" onClick={() => onEditObjective(objective)} aria-label="Editar objetivo">
-            <Pencil className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center">
+            <Button variant="ghost" size="icon" onClick={() => onEditObjective(objective)} aria-label="Editar objetivo">
+              <Pencil className="h-4 w-4" />
+            </Button>
+             {!objective.isArchived && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Archivar objetivo">
+                    <Archive className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás seguro de que quieres archivar este objetivo?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      El objetivo "{objective.description}" se ocultará de la vista principal.
+                      Podrás verlo en una sección de archivados más adelante (funcionalidad futura). 
+                      Esta acción no se puede deshacer inmediatamente desde esta vista.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleArchiveConfirm} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                      Confirmar Archivar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 mt-1">
           <Progress value={objectiveProgress()} className="h-2.5 w-full max-w-md" />
@@ -90,3 +141,4 @@ export const KanbanBoard = ({ objective, onTaskStatusChange, onTaskDragStart, dr
     </div>
   );
 };
+
