@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, LogOut, Briefcase, ChevronDown, Settings, UserCircle, Users, Check } from "lucide-react"; // Added Check
+import { PlusCircle, LogOut, Briefcase, ChevronDown, Settings, UserCircle, Users, Check } from "lucide-react";
 import { LogoIcon } from "@/components/icons/LogoIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -57,12 +57,12 @@ export const AppHeader = ({
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" className="flex items-center gap-2">
                         <Briefcase className="h-4 w-4" />
-                        <span>{currentWorkspace ? currentWorkspace.name : "Select Workspace"}</span>
+                        <span>{currentWorkspace ? currentWorkspace.name : "Seleccionar Espacio"}</span>
                         <ChevronDown className="h-4 w-4 opacity-50" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-60"> {/* Increased width */}
-                      <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+                    <DropdownMenuContent align="end" className="w-60">
+                      <DropdownMenuLabel>Espacios de Trabajo</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       {workspaces.map((ws) => (
                         <DropdownMenuItem key={ws.id} onClick={() => onWorkspaceSelected(ws.id)}>
@@ -73,12 +73,12 @@ export const AppHeader = ({
                        <DropdownMenuSeparator />
                        <DropdownMenuItem onClick={() => setIsWorkspaceDialogOpen(true)}>
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Create New Workspace
+                        Crear Nuevo Espacio
                       </DropdownMenuItem>
-                      {currentWorkspace && isOwner && ( // Only show if a workspace is selected AND user is owner
+                      {currentWorkspace && isOwner && (
                         <DropdownMenuItem onClick={onManageMembers}>
                           <Users className="mr-2 h-4 w-4" />
-                          Manage Members
+                          Administrar Miembros
                         </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
@@ -87,36 +87,36 @@ export const AppHeader = ({
               {(!workspaces || workspaces.length === 0) && (
                 <Button onClick={() => setIsWorkspaceDialogOpen(true)} size="sm" variant="outline">
                   <PlusCircle className="mr-2 h-4 w-4" />
-                  Create Workspace
+                  Crear Espacio
                 </Button>
               )}
 
               <Button onClick={onAddObjective} size="sm" disabled={!currentWorkspace}>
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Add Objective
+                Añadir Objetivo
               </Button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="rounded-full">
                     <UserCircle className="h-6 w-6" />
-                    <span className="sr-only">User menu</span>
+                    <span className="sr-only">Menú de usuario</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem disabled>
                     <span className="truncate text-sm text-muted-foreground">{user.email}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem disabled>
                     <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
+                    <span>Configuración</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout}>
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Logout</span>
+                    <span>Cerrar Sesión</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -124,10 +124,10 @@ export const AppHeader = ({
           ) : (
             <>
               <Button asChild variant="ghost" size="sm">
-                <Link href="/login">Login</Link>
+                <Link href="/login">Iniciar Sesión</Link>
               </Button>
               <Button asChild size="sm">
-                <Link href="/signup">Sign Up</Link>
+                <Link href="/signup">Registrarse</Link>
               </Button>
             </>
           )}

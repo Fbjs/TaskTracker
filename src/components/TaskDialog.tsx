@@ -21,6 +21,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon, Loader2 } from "lucide-react"; 
 import { format, isValid } from "date-fns"; 
+import { es } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
 import { updateTaskAction, getWorkspaceMembersAction } from "@/app/actions";
 
@@ -32,6 +33,19 @@ interface TaskDialogProps {
   onTaskSaved: (updatedTask: Task) => void;
   currentWorkspaceId?: string; 
 }
+
+const statusTranslations: Record<TaskStatus, string> = {
+  "To Do": "Por Hacer",
+  "In Progress": "En Progreso",
+  "Blocked": "Bloqueado",
+  "Done": "Hecho",
+};
+
+const priorityTranslations: Record<TaskPriority, string> = {
+  "Low": "Baja",
+  "Medium": "Media",
+  "High": "Alta",
+};
 
 export const TaskDialog = ({ 
   isOpen, 
@@ -75,7 +89,7 @@ export const TaskDialog = ({
       setIsLoadingMembers(true);
       const result = await getWorkspaceMembersAction(currentWorkspaceId);
       if ("error" in result) {
-        toast({ title: "Error", description: `Failed to load workspace members: ${result.error}`, variant: "destructive" });
+        toast({ title: "Error", description: `No se pudieron cargar los miembros: ${result.error}`, variant: "destructive" });
         setWorkspaceMembers([]);
       } else {
         setWorkspaceMembers(result);
@@ -92,7 +106,7 @@ export const TaskDialog = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!description.trim()) {
-      toast({ title: "Validation Error", description: "Task description cannot be empty.", variant: "destructive" });
+      toast({ title: "Error de Validación", description: "La descripción de la tarea no puede estar vacía.", variant: "destructive" });
       return;
     }
 
@@ -104,20 +118,20 @@ export const TaskDialog = ({
       updates.status = status;
       updates.priority = priority;
       
-      updates.startDate = startDate || null; // Send Date object or null
-      updates.dueDate = dueDate || null;   // Send Date object or null
-      updates.assigneeId = assigneeId || null; // Send string or null
+      updates.startDate = startDate || null;
+      updates.dueDate = dueDate || null;
+      updates.assigneeId = assigneeId || null;
       
       const result = await updateTaskAction(task.id, objectiveId, updates);
       if ("error" in result) {
-         toast({ title: "Error updating task", description: result.error, variant: "destructive" });
+         toast({ title: "Error al actualizar tarea", description: result.error, variant: "destructive" });
       } else {
         onTaskSaved(result); 
-        toast({ title: "Task Updated", description: `"${result.description}" has been successfully updated.` });
+        toast({ title: "Tarea Actualizada", description: `"${result.description}" se ha actualizado correctamente.` });
         onOpenChange(false);
       }
     } catch (error) {
-      toast({ title: "Error", description: "Failed to update task.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudo actualizar la tarea.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -132,19 +146,19 @@ export const TaskDialog = ({
     }}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle className="font-headline">Edit Task</DialogTitle>
+          <DialogTitle className="font-headline">Editar Tarea</DialogTitle>
           <DialogDescription>
-            Update the details for your task.
+            Actualiza los detalles de tu tarea.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4" id="task-dialog-form">
           <div>
-            <Label htmlFor="task-description">Description</Label>
+            <Label htmlFor="task-description">Descripción</Label>
             <Textarea
               id="task-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Task description"
+              placeholder="Descripción de la tarea"
               required
               className="mt-1"
             />
@@ -152,27 +166,27 @@ export const TaskDialog = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="task-status">Status</Label>
+              <Label htmlFor="task-status">Estado</Label>
               <Select value={status} onValueChange={(value: TaskStatus) => setStatus(value)}>
                 <SelectTrigger id="task-status" className="mt-1">
-                  <SelectValue placeholder="Select status" />
+                  <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
                 <SelectContent>
                   {ALL_TASK_STATUSES.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                    <SelectItem key={s} value={s}>{statusTranslations[s]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="task-priority">Priority</Label>
+              <Label htmlFor="task-priority">Prioridad</Label>
               <Select value={priority} onValueChange={(value: TaskPriority) => setPriority(value)}>
                 <SelectTrigger id="task-priority" className="mt-1">
-                  <SelectValue placeholder="Select priority" />
+                  <SelectValue placeholder="Seleccionar prioridad" />
                 </SelectTrigger>
                 <SelectContent>
                   {ALL_TASK_PRIORITIES.map(p => (
-                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                    <SelectItem key={p} value={p}>{priorityTranslations[p]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -181,7 +195,7 @@ export const TaskDialog = ({
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <Label htmlFor="task-start-date">Start Date</Label>
+                <Label htmlFor="task-start-date">Fecha de Inicio</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -190,7 +204,7 @@ export const TaskDialog = ({
                       id="task-start-date"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate && isValid(startDate) ? format(startDate, "PPP") : <span>Pick a date</span>}
+                      {startDate && isValid(startDate) ? format(startDate, "PPP", { locale: es }) : <span>Elegir fecha</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -199,12 +213,13 @@ export const TaskDialog = ({
                       selected={startDate}
                       onSelect={(date) => setStartDate(date || undefined)} 
                       initialFocus
+                      locale={es}
                     />
                   </PopoverContent>
                 </Popover>
             </div>
             <div>
-                <Label htmlFor="task-due-date">Due Date</Label>
+                <Label htmlFor="task-due-date">Fecha de Entrega</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -213,7 +228,7 @@ export const TaskDialog = ({
                       id="task-due-date"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dueDate && isValid(dueDate) ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                      {dueDate && isValid(dueDate) ? format(dueDate, "PPP", { locale: es }) : <span>Elegir fecha</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -223,23 +238,24 @@ export const TaskDialog = ({
                       onSelect={(date) => setDueDate(date || undefined)} 
                       initialFocus
                       disabled={startDate && isValid(startDate) ? { before: startDate } : undefined} 
+                      locale={es}
                     />
                   </PopoverContent>
                 </Popover>
             </div>
           </div>
            <div>
-              <Label htmlFor="task-assignee">Assignee</Label>
+              <Label htmlFor="task-assignee">Asignado a</Label>
                <Select 
                   value={assigneeId || "unassigned"} 
                   onValueChange={(value: string) => setAssigneeId(value === "unassigned" ? undefined : value)}
                   disabled={isLoadingMembers}
                 >
                 <SelectTrigger id="task-assignee" className="mt-1">
-                  <SelectValue placeholder={isLoadingMembers ? "Loading members..." : "Select assignee"} />
+                  <SelectValue placeholder={isLoadingMembers ? "Cargando miembros..." : "Seleccionar asignado"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">Sin asignar</SelectItem>
                   {workspaceMembers.map(member => (
                     <SelectItem key={member.id} value={member.id}>{member.email}</SelectItem>
                   ))}
@@ -250,16 +266,14 @@ export const TaskDialog = ({
         </form>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            Cancelar
           </Button>
           <Button type="submit" form="task-dialog-form" disabled={isSubmitting || isLoadingMembers}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save Changes
+            Guardar Cambios
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
-
-    

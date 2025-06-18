@@ -25,15 +25,15 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !confirmPassword) {
-      toast({ title: "Error", description: "Please fill in all fields.", variant: "destructive" });
+      toast({ title: "Error", description: "Por favor, completa todos los campos.", variant: "destructive" });
       return;
     }
     if (password !== confirmPassword) {
-      toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" });
+      toast({ title: "Error", description: "Las contraseñas no coinciden.", variant: "destructive" });
       return;
     }
     if (password.length < 6) {
-      toast({ title: "Error", description: "Password must be at least 6 characters long.", variant: "destructive" });
+      toast({ title: "Error", description: "La contraseña debe tener al menos 6 caracteres.", variant: "destructive" });
       return;
     }
 
@@ -42,9 +42,9 @@ export default function SignupPage() {
     setIsSubmitting(false);
 
     if ("error" in result) {
-      toast({ title: "Signup Failed", description: result.error, variant: "destructive" });
+      toast({ title: "Registro Fallido", description: result.error, variant: "destructive" });
     } else {
-      toast({ title: "Account Created", description: `Welcome, ${result.email}! You are now logged in.` });
+      toast({ title: "Cuenta Creada", description: `¡Bienvenido, ${result.email}! Has iniciado sesión.` });
       router.push("/");
     }
   };
@@ -57,17 +57,17 @@ export default function SignupPage() {
       </div>
       <Card className="w-full max-w-sm shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl font-headline">Sign Up</CardTitle>
-          <CardDescription>Create your TaskTracker account.</CardDescription>
+          <CardTitle className="text-2xl font-headline">Regístrate</CardTitle>
+          <CardDescription>Crea tu cuenta de TaskTracker.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Correo Electrónico</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="m@example.com"
+                placeholder="tu@ejemplo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -75,7 +75,7 @@ export default function SignupPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
@@ -86,7 +86,7 @@ export default function SignupPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <Label htmlFor="confirm-password">Confirmar Contraseña</Label>
               <Input
                 id="confirm-password"
                 type="password"
@@ -97,15 +97,15 @@ export default function SignupPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
-              {isSubmitting || authLoading ? <Loader2 className="animate-spin" /> : "Sign Up"}
+              {isSubmitting || authLoading ? <Loader2 className="animate-spin" /> : "Registrarse"}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="text-sm">
           <p>
-            Already have an account?{" "}
+            ¿Ya tienes una cuenta?{" "}
             <Link href="/login" className="font-medium text-primary underline hover:no-underline">
-              Login
+              Inicia Sesión
             </Link>
           </p>
         </CardFooter>

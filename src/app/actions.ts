@@ -19,7 +19,6 @@ import { isValid } from "date-fns";
 
 const SALT_ROUNDS = 10;
 
-// Helper to convert Mongoose document to a plain object compatible with frontend types
 function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: any, password?: string, memberIds?: any[], tasks?: any[], assigneeId?: any, startDate?: any, dueDate?: any }>(doc: any): Omit<T, 'password'> {
   if (!doc) return null as unknown as Omit<T, 'password'>;
   const plainObject = doc.toObject ? doc.toObject({ getters: true, versionKey: false }) : { ...doc };
@@ -35,21 +34,29 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
     plainObject.updatedAt = new Date(plainObject.updatedAt);
   }
   
-  if (plainObject.startDate && !(plainObject.startDate instanceof Date)) {
-    const parsedStartDate = new Date(plainObject.startDate);
-    if (isValid(parsedStartDate)) {
-        plainObject.startDate = parsedStartDate;
-    } else {
-        delete plainObject.startDate; // Remove if invalid after parsing
+  if (Object.prototype.hasOwnProperty.call(plainObject, 'startDate')) {
+    if (plainObject.startDate && !(plainObject.startDate instanceof Date)) {
+        const parsedStartDate = new Date(plainObject.startDate);
+        if (isValid(parsedStartDate)) {
+            plainObject.startDate = parsedStartDate;
+        } else {
+            delete plainObject.startDate; 
+        }
+    } else if (!plainObject.startDate) {
+        delete plainObject.startDate;
     }
   }
-  if (plainObject.dueDate && !(plainObject.dueDate instanceof Date)) {
-    const parsedDueDate = new Date(plainObject.dueDate);
-    if (isValid(parsedDueDate)) {
-        plainObject.dueDate = parsedDueDate;
-    } else {
-        delete plainObject.dueDate; // Remove if invalid after parsing
-    }
+  if (Object.prototype.hasOwnProperty.call(plainObject, 'dueDate')) {
+      if (plainObject.dueDate && !(plainObject.dueDate instanceof Date)) {
+          const parsedDueDate = new Date(plainObject.dueDate);
+          if (isValid(parsedDueDate)) {
+              plainObject.dueDate = parsedDueDate;
+          } else {
+              delete plainObject.dueDate;
+          }
+      } else if (!plainObject.dueDate) {
+          delete plainObject.dueDate;
+      }
   }
 
 
@@ -62,7 +69,7 @@ function serializeDocument<T extends { _id: any, createdAt?: any, updatedAt?: an
   }
 
   if (plainObject.assigneeId && typeof plainObject.assigneeId !== 'string') {
-    if (plainObject.assigneeId.email) { // If populated
+    if (plainObject.assigneeId.email) { 
         plainObject.assignee = {
             id: plainObject.assigneeId._id.toString(),
             email: plainObject.assigneeId.email,
@@ -95,11 +102,11 @@ export async function registerUserAction(email: string, passwordPlain: string): 
   try {
     const existingUser = await UserCollection.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      return { error: "User with this email already exists." };
+      return { error: "Un usuario con este correo electrónico ya existe." };
     }
 
     if (passwordPlain.length < 6) {
-      return { error: "Password must be at least 6 characters long."};
+      return { error: "La contraseña debe tener al menos 6 caracteres."};
     }
 
     const hashedPassword = await bcrypt.hash(passwordPlain, SALT_ROUNDS);
@@ -109,9 +116,9 @@ export async function registerUserAction(email: string, passwordPlain: string): 
   } catch (error: any) {
     console.error("Error registering user:", error);
     if (error.code === 11000) {
-        return { error: "User with this email already exists." };
+        return { error: "Un usuario con este correo electrónico ya existe." };
     }
-    return { error: "Failed to register user. " + (error.message || "Please try again.") };
+    return { error: "No se pudo registrar el usuario. " + (error.message || "Por favor, inténtalo de nuevo.") };
   }
 }
 
@@ -120,18 +127,18 @@ export async function loginUserAction(email: string, passwordPlain: string): Pro
   try {
     const userDoc = await UserCollection.findOne({ email: email.toLowerCase() }).lean();
     if (!userDoc || !userDoc.password) {
-      return { error: "Invalid email or password." };
+      return { error: "Correo electrónico o contraseña inválidos." };
     }
 
     const isMatch = await bcrypt.compare(passwordPlain, userDoc.password);
     if (!isMatch) {
-      return { error: "Invalid email or password." };
+      return { error: "Correo electrónico o contraseña inválidos." };
     }
 
     return serializeDocument<IUser>(userDoc) as User;
   } catch (error: any) {
     console.error("Error logging in user:", error);
-    return { error: "Failed to log in. " + (error.message || "Please try again.") };
+    return { error: "No se pudo iniciar sesión. " + (error.message || "Por favor, inténtalo de nuevo.") };
   }
 }
 
@@ -153,7 +160,7 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
 
     if (userWorkspaces.length === 0) {
       const defaultWorkspaceData = {
-        name: "My First Workspace",
+        name: "Mi Primer Espacio de Trabajo",
         ownerId: new mongoose.Types.ObjectId(userId),
         memberIds: [new mongoose.Types.ObjectId(userId)]
       };
@@ -193,17 +200,17 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
 export async function createWorkspaceAction(name: string, ownerId: string): Promise<Workspace | { error: string }> {
   await dbConnect();
   if (!name.trim()) {
-    return { error: "Workspace name cannot be empty." };
+    return { error: "El nombre del espacio de trabajo no puede estar vacío." };
   }
   if (!ownerId) {
-    return { error: "Owner ID is required to create a workspace."}
+    return { error: "Se requiere el ID del propietario para crear un espacio de trabajo."}
   }
 
   try {
     const ownerObjectId = new mongoose.Types.ObjectId(ownerId);
     const ownerExists = await UserCollection.findById(ownerObjectId);
     if (!ownerExists) {
-        return { error: "Owner user not found." };
+        return { error: "Usuario propietario no encontrado." };
     }
 
     const newWorkspaceDoc = await WorkspaceCollection.create({
@@ -216,34 +223,34 @@ export async function createWorkspaceAction(name: string, ownerId: string): Prom
   } catch (error: any) {
     console.error("Error creating workspace:", error);
     if (error.code === 11000) {
-      return { error: "A workspace with this name might already exist or other unique constraint violation." };
+      return { error: "Un espacio de trabajo con este nombre ya podría existir u otra violación de restricción única." };
     }
-    return { error: "Failed to create workspace. " + error.message };
+    return { error: "No se pudo crear el espacio de trabajo. " + error.message };
   }
 }
 
 export async function addMemberToWorkspaceAction(workspaceId: string, memberEmail: string, currentUserId: string): Promise<Workspace | { error: string }> {
   await dbConnect();
   if (!workspaceId || !memberEmail || !currentUserId) {
-    return { error: "Workspace ID, member email, and current user ID are required." };
+    return { error: "Se requieren el ID del espacio de trabajo, el correo del miembro y el ID del usuario actual." };
   }
 
   try {
     const workspace = await WorkspaceCollection.findById(workspaceId);
     if (!workspace) {
-      return { error: "Workspace not found." };
+      return { error: "Espacio de trabajo no encontrado." };
     }
     if (workspace.ownerId.toString() !== currentUserId) {
-      return { error: "Only the workspace owner can add members." };
+      return { error: "Solo el propietario del espacio de trabajo puede añadir miembros." };
     }
 
     const memberToAdd = await UserCollection.findOne({ email: memberEmail.toLowerCase() }).select('_id email');
     if (!memberToAdd) {
-      return { error: `User with email ${memberEmail} not found.` };
+      return { error: `Usuario con correo ${memberEmail} no encontrado.` };
     }
 
     if (workspace.memberIds.map(id => id.toString()).includes(memberToAdd._id.toString())) {
-      return { error: `User ${memberEmail} is already a member of this workspace.` };
+      return { error: `El usuario ${memberEmail} ya es miembro de este espacio de trabajo.` };
     }
 
     workspace.memberIds.push(memberToAdd._id);
@@ -252,33 +259,33 @@ export async function addMemberToWorkspaceAction(workspaceId: string, memberEmai
     return serializeDocument<IWorkspace>(workspace) as Workspace;
   } catch (error: any) {
     console.error("Error adding member to workspace:", error);
-    return { error: "Failed to add member. " + error.message };
+    return { error: "No se pudo añadir miembro. " + error.message };
   }
 }
 
 export async function removeMemberFromWorkspaceAction(workspaceId: string, memberIdToRemove: string, currentUserId: string): Promise<Workspace | { error: string }> {
   await dbConnect();
   if (!workspaceId || !memberIdToRemove || !currentUserId) {
-    return { error: "Workspace ID, member ID to remove, and current user ID are required." };
+    return { error: "Se requieren el ID del espacio de trabajo, el ID del miembro a eliminar y el ID del usuario actual." };
   }
 
   try {
     const workspace = await WorkspaceCollection.findById(workspaceId);
     if (!workspace) {
-      return { error: "Workspace not found." };
+      return { error: "Espacio de trabajo no encontrado." };
     }
 
     if (workspace.ownerId.toString() !== currentUserId) {
-      return { error: "Only the workspace owner can remove members." };
+      return { error: "Solo el propietario del espacio de trabajo puede eliminar miembros." };
     }
 
     if (workspace.ownerId.toString() === memberIdToRemove) {
-      return { error: "The workspace owner cannot be removed." };
+      return { error: "El propietario del espacio de trabajo no puede ser eliminado." };
     }
 
     const memberExists = workspace.memberIds.map(id => id.toString()).includes(memberIdToRemove);
     if (!memberExists) {
-      return { error: "User is not a member of this workspace or already removed." };
+      return { error: "El usuario no es miembro de este espacio de trabajo o ya fue eliminado." };
     }
 
     workspace.memberIds = workspace.memberIds.filter(id => id.toString() !== memberIdToRemove);
@@ -296,14 +303,14 @@ export async function removeMemberFromWorkspaceAction(workspaceId: string, membe
     return serializeDocument<IWorkspace>(workspace) as Workspace;
   } catch (error: any) {
     console.error("Error removing member from workspace:", error);
-    return { error: "Failed to remove member. " + error.message };
+    return { error: "No se pudo eliminar miembro. " + error.message };
   }
 }
 
 export async function getWorkspaceMembersAction(workspaceId: string): Promise<User[] | { error: string }> {
   await dbConnect();
   if (!workspaceId) {
-    return { error: "Workspace ID is required." };
+    return { error: "Se requiere el ID del espacio de trabajo." };
   }
   try {
     const workspace = await WorkspaceCollection.findById(workspaceId).populate<{ memberIds: IUser[] }>({
@@ -311,12 +318,12 @@ export async function getWorkspaceMembersAction(workspaceId: string): Promise<Us
         select: 'email _id'
     }).lean();
     if (!workspace) {
-      return { error: "Workspace not found." };
+      return { error: "Espacio de trabajo no encontrado." };
     }
     return workspace.memberIds.map(member => serializeDocument<IUser>(member) as User);
   } catch (error: any) {
     console.error("Error fetching workspace members:", error);
-    return { error: "Failed to fetch workspace members. " + error.message };
+    return { error: "No se pudieron obtener los miembros del espacio de trabajo. " + error.message };
   }
 }
 
@@ -328,7 +335,7 @@ export async function handleSuggestTasks(objectivePrompt: string): Promise<AISug
     return result;
   } catch (error) {
     console.error("Error calling AI suggestion flow:", error);
-    return { error: "Failed to get AI suggestions. Please try again." };
+    return { error: "No se pudieron obtener sugerencias de IA. Por favor, inténtalo de nuevo." };
   }
 }
 
@@ -341,18 +348,18 @@ export async function addObjectiveAction(
   await dbConnect();
 
   if (!userId || !workspaceId) {
-    return { error: "User ID and Workspace ID are required to create an objective." };
+    return { error: "Se requieren el ID de Usuario y el ID de Espacio de Trabajo para crear un objetivo." };
   }
   if (!description.trim()) {
-    return { error: "Objective description cannot be empty." };
+    return { error: "La descripción del objetivo не может быть пустой." };
   }
 
   let newObjectiveDoc: IObjective | null = null;
   try {
     const workspace = await WorkspaceCollection.findById(workspaceId);
-    if (!workspace) return { error: "Workspace not found." };
+    if (!workspace) return { error: "Espacio de trabajo no encontrado." };
     if (!workspace.memberIds.map(id => id.toString()).includes(userId)) {
-        return { error: "User is not a member of this workspace." };
+        return { error: "El usuario no es miembro de este espacio de trabajo." };
     }
 
     newObjectiveDoc = await ObjectiveCollection.create({
@@ -367,7 +374,7 @@ export async function addObjectiveAction(
             .filter(td => td.description && td.description.trim() !== "")
             .map(taskInput => {
                 if (taskInput.assigneeId && !workspace.memberIds.map(id => id.toString()).includes(taskInput.assigneeId)) {
-                    throw new Error(`Assignee with ID ${taskInput.assigneeId} is not a member of this workspace.`);
+                    throw new Error(`El asignado con ID ${taskInput.assigneeId} no es miembro de este espacio de trabajo.`);
                 }
 
                 let effectiveStartDate: Date | undefined = undefined;
@@ -416,13 +423,13 @@ export async function addObjectiveAction(
     if (!populatedObjectiveDoc) {
         const fallbackObjective = await ObjectiveCollection.findById(newObjectiveDoc._id).lean();
         if (fallbackObjective) return serializeDocument<IObjective>(fallbackObjective) as Objective;
-        return { error: "Failed to retrieve the newly created objective with tasks."};
+        return { error: "No se pudo recuperar el objetivo recién creado con tareas."};
     }
 
     return serializeDocument<IObjective>(populatedObjectiveDoc) as Objective;
 
   } catch (error: any) {
-     if (newObjectiveDoc && !newObjectiveDoc.isNew) { // Check if it was ever saved
+     if (newObjectiveDoc && !newObjectiveDoc.isNew) {
         const fallbackObjective = await ObjectiveCollection.findById(newObjectiveDoc._id)
           .populate<{ tasks: ITask[] }>({
               path: 'tasks',
@@ -431,7 +438,7 @@ export async function addObjectiveAction(
         if (fallbackObjective) return serializeDocument<IObjective>(fallbackObjective) as Objective;
     }
     console.error("Error adding objective:", error);
-    return { error: "Failed to add objective. " + error.message };
+    return { error: "No se pudo añadir el objetivo. " + error.message };
   }
 }
 
@@ -443,18 +450,18 @@ export async function updateObjectiveAction(
   tasksToUpdateData: { id: string; description?: string; assigneeId?: string | null; startDate?: Date | null; dueDate?: Date | null }[] = []
 ): Promise<Objective | { error: string }> {
   await dbConnect();
-  if (!objectiveId) return { error: "Objective ID is required." };
+  if (!objectiveId) return { error: "Se requiere el ID del objetivo." };
 
   try {
     const objective = await ObjectiveCollection.findById(objectiveId);
-    if (!objective) return { error: "Objective not found." };
+    if (!objective) return { error: "Objetivo no encontrado." };
 
     if (newDescription.trim()) {
       objective.description = newDescription.trim();
     }
 
     const workspace = await WorkspaceCollection.findById(objective.workspaceId);
-    if (!workspace) return { error: "Associated workspace not found. Cannot validate members." };
+    if (!workspace) return { error: "Espacio de trabajo asociado no encontrado. No se pueden validar miembros." };
 
     if (tasksToDeleteIds.length > 0) {
       await TaskCollection.deleteMany({ _id: { $in: tasksToDeleteIds }, objectiveId: objective._id });
@@ -474,44 +481,36 @@ export async function updateObjectiveAction(
           changed = true;
         }
         
-        // Handle startDate for update
         if (Object.prototype.hasOwnProperty.call(taskUpdate, 'startDate')) {
             const clientStartDate = taskUpdate.startDate;
-            let newStartDateToSet: Date | null = null;
-
-            if (clientStartDate === null) { // Explicitly clear
+            if (clientStartDate === null) {
                 if (taskDocToUpdate.startDate) {
                     updateQuery.$unset.startDate = "";
                     changed = true;
                 }
-            } else if (clientStartDate) { // Attempt to set/update
+            } else if (clientStartDate) {
                 const parsedDate = clientStartDate instanceof Date ? clientStartDate : new Date(clientStartDate);
                 if (isValid(parsedDate)) {
-                    newStartDateToSet = parsedDate;
-                    if (!taskDocToUpdate.startDate || new Date(taskDocToUpdate.startDate).getTime() !== newStartDateToSet.getTime()) {
-                        updateQuery.$set.startDate = newStartDateToSet;
+                    if (!taskDocToUpdate.startDate || new Date(taskDocToUpdate.startDate).getTime() !== parsedDate.getTime()) {
+                        updateQuery.$set.startDate = parsedDate;
                         changed = true;
                     }
                 }
             }
         }
 
-        // Handle dueDate for update
         if (Object.prototype.hasOwnProperty.call(taskUpdate, 'dueDate')) {
             const clientDueDate = taskUpdate.dueDate;
-            let newDueDateToSet: Date | null = null;
-
-            if (clientDueDate === null) { // Explicitly clear
+            if (clientDueDate === null) {
                 if (taskDocToUpdate.dueDate) {
                     updateQuery.$unset.dueDate = "";
                     changed = true;
                 }
-            } else if (clientDueDate) { // Attempt to set/update
+            } else if (clientDueDate) {
                 const parsedDate = clientDueDate instanceof Date ? clientDueDate : new Date(clientDueDate);
                 if (isValid(parsedDate)) {
-                    newDueDateToSet = parsedDate;
-                     if (!taskDocToUpdate.dueDate || new Date(taskDocToUpdate.dueDate).getTime() !== newDueDateToSet.getTime()) {
-                        updateQuery.$set.dueDate = newDueDateToSet;
+                     if (!taskDocToUpdate.dueDate || new Date(taskDocToUpdate.dueDate).getTime() !== parsedDate.getTime()) {
+                        updateQuery.$set.dueDate = parsedDate;
                         changed = true;
                     }
                 }
@@ -527,7 +526,7 @@ export async function updateObjectiveAction(
              changed = true;
            } else if (newAssigneeId && newAssigneeId !== "" && newAssigneeId !== currentAssigneeId) {
              if (!workspace.memberIds.map(id => id.toString()).includes(newAssigneeId)) {
-                throw new Error(`Cannot assign task ${taskUpdate.description || taskDocToUpdate.description}: User ${newAssigneeId} is not a member of the workspace.`);
+                throw new Error(`No se puede asignar la tarea ${taskUpdate.description || taskDocToUpdate.description}: El usuario ${newAssigneeId} no es miembro del espacio de trabajo.`);
              }
              updateQuery.$set.assigneeId = new mongoose.Types.ObjectId(newAssigneeId);
              changed = true;
@@ -548,7 +547,7 @@ export async function updateObjectiveAction(
             .filter(td => td.description && td.description.trim() !== "")
             .map(taskInput => {
                 if (taskInput.assigneeId && !workspace.memberIds.map(id => id.toString()).includes(taskInput.assigneeId)) {
-                    throw new Error(`Cannot create task ${taskInput.description}: User ${taskInput.assigneeId} is not a member of the workspace.`);
+                    throw new Error(`No se puede crear la tarea ${taskInput.description}: El usuario ${taskInput.assigneeId} no es miembro del espacio de trabajo.`);
                 }
                 
                 let effectiveStartDate: Date | undefined = undefined;
@@ -594,20 +593,20 @@ export async function updateObjectiveAction(
         })
         .exec();
 
-    if (!populatedObjective) return { error: "Failed to repopulate objective after update."};
+    if (!populatedObjective) return { error: "No se pudo volver a popular el objetivo después de la actualización."};
 
     revalidatePath("/");
     return serializeDocument<IObjective>(populatedObjective) as Objective;
 
   } catch (error: any) {
     console.error("Error updating objective:", error);
-    return { error: "Failed to update objective. " + error.message };
+    return { error: "No se pudo actualizar el objetivo. " + error.message };
   }
 }
 
 export async function updateTaskStatusAction(taskId: string, newStatus: TaskStatus, objectiveId: string): Promise<{success: boolean, task?: Task} | {success: boolean, error?: string}> {
   await dbConnect();
-  if (!taskId) return { success: false, error: "Task ID is required." };
+  if (!taskId) return { success: false, error: "Se requiere el ID de la tarea." };
 
   try {
     const updatedTaskDoc = await TaskCollection.findByIdAndUpdate(
@@ -617,13 +616,13 @@ export async function updateTaskStatusAction(taskId: string, newStatus: TaskStat
     ).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
 
     if (!updatedTaskDoc) {
-      return { success: false, error: "Task not found." };
+      return { success: false, error: "Tarea no encontrada." };
     }
     revalidatePath("/");
     return { success: true, task: serializeDocument<ITask>(updatedTaskDoc) as Task };
   } catch (error: any) {
     console.error("Error updating task status:", error);
-    return { success: false, error: "Failed to update task status. " + error.message };
+    return { success: false, error: "No se pudo actualizar el estado de la tarea. " + error.message };
   }
 }
 
@@ -633,17 +632,16 @@ export async function updateTaskAction(
   updates: Partial<Omit<Task, 'id' | 'objectiveId' | 'createdAt' | 'assignee'>> & { assigneeId?: string | null}
 ): Promise<Task | { error: string }> {
   await dbConnect();
-  if (!taskId) return { error: "Task ID is required." };
+  if (!taskId) return { error: "Se requiere el ID de la tarea." };
 
   const taskToUpdate = await TaskCollection.findById(taskId);
-  if (!taskToUpdate) return { error: "Task not found to update." };
+  if (!taskToUpdate) return { error: "Tarea no encontrada para actualizar." };
 
   const { objectiveId: _, assignee, ...rawUpdates } = updates;
 
   const updatePayload: { $set: any, $unset: any } = { $set: {}, $unset: {} };
   let changedFields = 0;
 
-  // Description, Status, Priority (Directly set if provided and different)
   if (rawUpdates.hasOwnProperty('description') && rawUpdates.description !== undefined && rawUpdates.description !== taskToUpdate.description) {
     updatePayload.$set.description = rawUpdates.description;
     changedFields++;
@@ -657,15 +655,14 @@ export async function updateTaskAction(
     changedFields++;
   }
 
-  // StartDate
   if (rawUpdates.hasOwnProperty('startDate')) {
     const clientStartDate = rawUpdates.startDate;
-    if (clientStartDate === null) { // Intent to clear
+    if (clientStartDate === null) { 
       if (taskToUpdate.startDate) { 
         updatePayload.$unset.startDate = "";
         changedFields++;
       }
-    } else { // Intent to set/change
+    } else if (clientStartDate instanceof Date || typeof clientStartDate === 'string') { 
       const newStartDate = clientStartDate instanceof Date ? clientStartDate : new Date(clientStartDate);
       if (isValid(newStartDate)) {
         if (!taskToUpdate.startDate || new Date(taskToUpdate.startDate).getTime() !== newStartDate.getTime()) {
@@ -676,7 +673,6 @@ export async function updateTaskAction(
     }
   }
 
-  // DueDate
   if (rawUpdates.hasOwnProperty('dueDate')) {
     const clientDueDate = rawUpdates.dueDate;
     if (clientDueDate === null) { 
@@ -684,7 +680,7 @@ export async function updateTaskAction(
         updatePayload.$unset.dueDate = "";
         changedFields++;
       }
-    } else { 
+    } else if (clientDueDate instanceof Date || typeof clientDueDate === 'string') { 
       const newDueDate = clientDueDate instanceof Date ? clientDueDate : new Date(clientDueDate);
       if (isValid(newDueDate)) {
          if (!taskToUpdate.dueDate || new Date(taskToUpdate.dueDate).getTime() !== newDueDate.getTime()) {
@@ -695,7 +691,6 @@ export async function updateTaskAction(
     }
   }
   
-  // AssigneeId
   if (rawUpdates.hasOwnProperty('assigneeId')) {
     const clientAssigneeId = rawUpdates.assigneeId; 
     if (clientAssigneeId === null || clientAssigneeId === undefined || clientAssigneeId.trim() === "") { 
@@ -706,11 +701,11 @@ export async function updateTaskAction(
     } else { 
         const taskObjective = await ObjectiveCollection.findById(taskToUpdate.objectiveId).populate<{ workspaceId: IWorkspace }>('workspaceId');
         if (!taskObjective || !taskObjective.workspaceId || !(taskObjective.workspaceId as IWorkspace).memberIds) {
-            return { error: "Could not verify workspace for assignee." };
+            return { error: "No se pudo verificar el espacio de trabajo para el asignado." };
         }
         const workspace = taskObjective.workspaceId as IWorkspace;
         if (!workspace.memberIds.map(id => id.toString()).includes(clientAssigneeId)) {
-            return { error: "Assignee is not a member of this workspace." };
+            return { error: "El asignado no es miembro de este espacio de trabajo." };
         }
         if (!taskToUpdate.assigneeId || taskToUpdate.assigneeId.toString() !== clientAssigneeId) {
             updatePayload.$set.assigneeId = new mongoose.Types.ObjectId(clientAssigneeId);
@@ -722,9 +717,9 @@ export async function updateTaskAction(
   if (Object.keys(updatePayload.$set).length === 0) delete updatePayload.$set;
   if (Object.keys(updatePayload.$unset).length === 0) delete updatePayload.$unset;
 
-  if (changedFields === 0) {
+  if (changedFields === 0 && Object.keys(updatePayload.$set).length === 0 && Object.keys(updatePayload.$unset).length === 0) {
      const currentTaskDoc = await TaskCollection.findById(taskId).populate<{ assigneeId: IUser }>('assigneeId', 'email _id').lean();
-     if (!currentTaskDoc) return { error: "Task not found."};
+     if (!currentTaskDoc) return { error: "Tarea no encontrada."};
      return serializeDocument<ITask>(currentTaskDoc) as Task;
   }
 
@@ -736,15 +731,12 @@ export async function updateTaskAction(
     ).populate<{ assigneeId: IUser }>('assigneeId', 'email _id');
 
     if (!updatedTaskDoc) {
-      return { error: "Task not found or update failed." };
+      return { error: "Tarea no encontrada o actualización fallida." };
     }
     revalidatePath("/");
     return serializeDocument<ITask>(updatedTaskDoc) as Task;
   } catch (error: any) {
     console.error("Error updating task in DB:", error);
-    return { error: "Failed to update task. " + error.message };
+    return { error: "No se pudo actualizar la tarea. " + error.message };
   }
 }
-    
-
-    

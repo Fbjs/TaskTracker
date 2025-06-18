@@ -49,7 +49,7 @@ export const ManageMembersDialog = ({
   const [members, setMembers] = useState<User[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRemovingMember, setIsRemovingMember] = useState<string | null>(null); // Store ID of member being removed
+  const [isRemovingMember, setIsRemovingMember] = useState<string | null>(null);
   const { toast } = useToast();
 
   const isOwner = workspace.ownerId === currentUserId;
@@ -59,7 +59,7 @@ export const ManageMembersDialog = ({
     setIsLoadingMembers(true);
     const result = await getWorkspaceMembersAction(workspace.id);
     if ("error" in result) {
-      toast({ title: "Error", description: `Failed to load members: ${result.error}`, variant: "destructive" });
+      toast({ title: "Error", description: `No se pudieron cargar los miembros: ${result.error}`, variant: "destructive" });
       setMembers([]);
     } else {
       setMembers(result);
@@ -74,11 +74,11 @@ export const ManageMembersDialog = ({
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!memberEmail.trim()) {
-      toast({ title: "Validation Error", description: "Member email cannot be empty.", variant: "destructive" });
+      toast({ title: "Error de Validación", description: "El correo del miembro no puede estar vacío.", variant: "destructive" });
       return;
     }
     if (!isOwner) {
-      toast({ title: "Permission Denied", description: "Only the workspace owner can add members.", variant: "destructive" });
+      toast({ title: "Permiso Denegado", description: "Solo el propietario del espacio de trabajo puede añadir miembros.", variant: "destructive" });
       return;
     }
 
@@ -86,15 +86,15 @@ export const ManageMembersDialog = ({
     try {
       const result = await addMemberToWorkspaceAction(workspace.id, memberEmail, currentUserId);
       if ("error" in result) {
-        toast({ title: "Error Adding Member", description: result.error, variant: "destructive" });
+        toast({ title: "Error al Añadir Miembro", description: result.error, variant: "destructive" });
       } else {
-        toast({ title: "Member Added", description: `User ${memberEmail} added to workspace.` });
-        setMemberEmail(""); // Clear input
-        onMembersChanged(result); // Notify parent of change
-        fetchMembers(); // Refresh member list
+        toast({ title: "Miembro Añadido", description: `Usuario ${memberEmail} añadido al espacio de trabajo.` });
+        setMemberEmail("");
+        onMembersChanged(result);
+        fetchMembers();
       }
     } catch (error: any) {
-      toast({ title: "Error", description: `Failed to add member. ${error.message}`, variant: "destructive" });
+      toast({ title: "Error", description: `No se pudo añadir miembro. ${error.message}`, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -102,21 +102,21 @@ export const ManageMembersDialog = ({
 
   const handleConfirmRemoveMember = async (memberIdToRemove: string) => {
     if (!isOwner) {
-      toast({ title: "Permission Denied", description: "Only the workspace owner can remove members.", variant: "destructive" });
+      toast({ title: "Permiso Denegado", description: "Solo el propietario del espacio de trabajo puede eliminar miembros.", variant: "destructive" });
       return;
     }
     setIsRemovingMember(memberIdToRemove);
     try {
       const result = await removeMemberFromWorkspaceAction(workspace.id, memberIdToRemove, currentUserId);
       if ("error" in result) {
-        toast({ title: "Error Removing Member", description: result.error, variant: "destructive" });
+        toast({ title: "Error al Eliminar Miembro", description: result.error, variant: "destructive" });
       } else {
-        toast({ title: "Member Removed", description: `Member removed successfully.` });
-        onMembersChanged(result); // Notify parent of change
-        fetchMembers(); // Refresh member list
+        toast({ title: "Miembro Eliminado", description: `Miembro eliminado correctamente.` });
+        onMembersChanged(result);
+        fetchMembers();
       }
     } catch (error: any) {
-      toast({ title: "Error", description: `Failed to remove member. ${error.message}`, variant: "destructive" });
+      toast({ title: "Error", description: `No se pudo eliminar miembro. ${error.message}`, variant: "destructive" });
     } finally {
       setIsRemovingMember(null);
     }
@@ -127,23 +127,23 @@ export const ManageMembersDialog = ({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-headline">Manage Members for {workspace.name}</DialogTitle>
+          <DialogTitle className="font-headline">Administrar Miembros para {workspace.name}</DialogTitle>
           <DialogDescription>
-            {isOwner ? "Add or remove members from this workspace." : "View members of this workspace."}
+            {isOwner ? "Añade o elimina miembros de este espacio de trabajo." : "Ver miembros de este espacio de trabajo."}
           </DialogDescription>
         </DialogHeader>
         
         {isOwner && (
           <form onSubmit={handleAddMember} className="space-y-3 py-2" id="add-member-form">
             <div>
-              <Label htmlFor="member-email">Add Member by Email</Label>
+              <Label htmlFor="member-email">Añadir Miembro por Correo</Label>
               <div className="flex items-center gap-2 mt-1">
                 <Input
                   id="member-email"
                   type="email"
                   value={memberEmail}
                   onChange={(e) => setMemberEmail(e.target.value)}
-                  placeholder="user@example.com"
+                  placeholder="usuario@ejemplo.com"
                   required
                   disabled={isSubmitting}
                 />
@@ -156,7 +156,7 @@ export const ManageMembersDialog = ({
         )}
 
         <div className="mt-4">
-          <h4 className="text-sm font-medium mb-2">Current Members:</h4>
+          <h4 className="text-sm font-medium mb-2">Miembros Actuales:</h4>
           {isLoadingMembers ? (
             <div className="flex justify-center items-center h-20">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -166,7 +166,7 @@ export const ManageMembersDialog = ({
               <ul className="space-y-1">
                 {members.map((member) => (
                   <li key={member.id} className="flex justify-between items-center text-sm p-1.5 hover:bg-muted/50 rounded">
-                    <span>{member.email} {member.id === workspace.ownerId && "(Owner)"}</span>
+                    <span>{member.email} {member.id === workspace.ownerId && "(Propietario)"}</span>
                     {isOwner && member.id !== workspace.ownerId && (
                        <AlertDialog>
                          <AlertDialogTrigger asChild>
@@ -174,7 +174,7 @@ export const ManageMembersDialog = ({
                                 variant="ghost" 
                                 size="icon" 
                                 className="h-6 w-6 text-destructive hover:text-destructive" 
-                                title="Remove member"
+                                title="Eliminar miembro"
                                 disabled={isRemovingMember === member.id}
                             >
                               {isRemovingMember === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
@@ -182,16 +182,16 @@ export const ManageMembersDialog = ({
                          </AlertDialogTrigger>
                          <AlertDialogContent>
                            <AlertDialogHeader>
-                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                              <AlertDialogDescription>
-                               This action will remove {member.email} from the workspace. They will lose access to its objectives and tasks. Any tasks currently assigned to them will be unassigned. This cannot be undone.
+                               Esta acción eliminará a {member.email} del espacio de trabajo. Perderá acceso a sus objetivos y tareas. Cualquier tarea actualmente asignada a este miembro quedará sin asignar. Esto no se puede deshacer.
                              </AlertDialogDescription>
                            </AlertDialogHeader>
                            <AlertDialogFooter>
-                             <AlertDialogCancel disabled={isRemovingMember === member.id}>Cancel</AlertDialogCancel>
+                             <AlertDialogCancel disabled={isRemovingMember === member.id}>Cancelar</AlertDialogCancel>
                              <AlertDialogAction onClick={() => handleConfirmRemoveMember(member.id)} disabled={isRemovingMember === member.id}>
                                {isRemovingMember === member.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                               Confirm Remove
+                               Confirmar Eliminación
                              </AlertDialogAction>
                            </AlertDialogFooter>
                          </AlertDialogContent>
@@ -202,17 +202,16 @@ export const ManageMembersDialog = ({
               </ul>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">No members found (except the owner, if applicable).</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No se encontraron miembros (excepto el propietario, si aplica).</p>
           )}
         </div>
 
         <DialogFooter className="mt-4">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isRemovingMember !== null || isSubmitting}>
-            Close
+            Cerrar
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
-

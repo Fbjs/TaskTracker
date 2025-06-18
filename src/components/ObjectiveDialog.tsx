@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Sparkles, PlusCircle, Trash2, Loader2, CalendarIcon } from "lucide-react";
 import { format, isValid } from "date-fns"; 
+import { es } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
 import { handleSuggestTasks, addObjectiveAction, updateObjectiveAction, getWorkspaceMembersAction } from "@/app/actions";
 
@@ -121,7 +122,7 @@ export const ObjectiveDialog = ({
       setIsLoadingMembers(true);
       const result = await getWorkspaceMembersAction(currentWorkspaceId);
       if ("error" in result) {
-        toast({ title: "Error", description: `Failed to load workspace members: ${result.error}`, variant: "destructive" });
+        toast({ title: "Error", description: `No se pudieron cargar los miembros del espacio de trabajo: ${result.error}`, variant: "destructive" });
         setWorkspaceMembers([]);
       } else {
         setWorkspaceMembers(result);
@@ -139,7 +140,7 @@ export const ObjectiveDialog = ({
 
   const handleGetAiSuggestions = async () => {
     if (!aiPrompt.trim()) {
-      toast({ title: "AI Prompt Empty", description: "Please enter a prompt for AI suggestions.", variant: "default" });
+      toast({ title: "Solicitud para IA Vacía", description: "Por favor, ingresa una solicitud para las sugerencias de IA.", variant: "default" });
       return;
     }
     setIsAiLoading(true);
@@ -147,7 +148,7 @@ export const ObjectiveDialog = ({
     setIsAiLoading(false);
 
     if ("error" in result) {
-      toast({ title: "AI Suggestion Failed", description: result.error, variant: "destructive" });
+      toast({ title: "Fallo en Sugerencia de IA", description: result.error, variant: "destructive" });
     } else {
       setObjectiveDescription(result.objectiveDescription);
       setTasks(result.tasks.map(task => ({ 
@@ -159,7 +160,7 @@ export const ObjectiveDialog = ({
         isNew: true, 
         isDeleted: false 
       })));
-      toast({ title: "AI Suggestions Applied", description: "Review and assign tasks to workspace members." });
+      toast({ title: "Sugerencias de IA Aplicadas", description: "Revisa y asigna las tareas a los miembros del espacio de trabajo." });
     }
   };
 
@@ -196,7 +197,7 @@ export const ObjectiveDialog = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!objectiveDescription.trim()) {
-      toast({ title: "Validation Error", description: "Objective description cannot be empty.", variant: "destructive" });
+      toast({ title: "Error de Validación", description: "La descripción del objetivo no puede estar vacía.", variant: "destructive" });
       return;
     }
 
@@ -208,14 +209,14 @@ export const ObjectiveDialog = ({
             task => task.isNew && !task.assigneeId && !task.startDate && !task.dueDate
         );
         if (!allProblemTasksAreTrulyEmptyAndNew) {
-            toast({ title: "Validation Error", description: "All active task descriptions must be filled.", variant: "destructive" });
+            toast({ title: "Error de Validación", description: "Todas las descripciones de tareas activas deben estar completas.", variant: "destructive" });
             return;
         }
     }
 
 
     if (!currentWorkspaceId || !currentUserId) {
-      toast({ title: "Error", description: "User or Workspace context is missing.", variant: "destructive" });
+      toast({ title: "Error", description: "Falta el contexto de Usuario o Espacio de Trabajo.", variant: "destructive" });
       return;
     }
 
@@ -228,8 +229,8 @@ export const ObjectiveDialog = ({
           .map(t => ({ 
             description: t.description, 
             assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId,
-            startDate: t.startDate || null, // Send Date object or null
-            dueDate: t.dueDate || null,     // Send Date object or null
+            startDate: t.startDate || null,
+            dueDate: t.dueDate || null,
            }));
         
         const tasksToDeleteIds = tasks
@@ -262,8 +263,8 @@ export const ObjectiveDialog = ({
           .map(t => ({ 
             description: t.description, 
             assigneeId: t.assigneeId === "unassigned" ? undefined : t.assigneeId,
-            startDate: t.startDate || undefined, // For new tasks, undefined is fine if not set
-            dueDate: t.dueDate || undefined,   // For new tasks, undefined is fine if not set
+            startDate: t.startDate || undefined,
+            dueDate: t.dueDate || undefined,
           }));
 
         result = await addObjectiveAction(
@@ -275,15 +276,15 @@ export const ObjectiveDialog = ({
       }
 
       if ("error" in result) {
-        toast({ title: `Error ${isEditMode ? 'Updating' : 'Adding'} Objective`, description: result.error, variant: "destructive" });
+        toast({ title: `Error al ${isEditMode ? 'Actualizar' : 'Añadir'} Objetivo`, description: result.error, variant: "destructive" });
       } else {
         onObjectiveSaved(result);
-        toast({ title: `Objective ${isEditMode ? 'Updated' : 'Added'}`, description: `"${result.description}" has been successfully ${isEditMode ? 'updated' : 'created'}.` });
+        toast({ title: `Objetivo ${isEditMode ? 'Actualizado' : 'Añadido'}`, description: `"${result.description}" se ha ${isEditMode ? 'actualizado' : 'creado'} correctamente.` });
         onOpenChange(false);
       }
 
     } catch (error: any) {
-      toast({ title: "Error", description: `Failed to ${isEditMode ? 'update' : 'add'} objective. ${error.message}`, variant: "destructive" });
+      toast({ title: "Error", description: `No se pudo ${isEditMode ? 'actualizar' : 'añadir'} el objetivo. ${error.message}`, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -298,10 +299,10 @@ export const ObjectiveDialog = ({
     }}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="font-headline">{isEditMode ? "Edit Objective" : "Add New Objective"}</DialogTitle>
+          <DialogTitle className="font-headline">{isEditMode ? "Editar Objetivo" : "Añadir Nuevo Objetivo"}</DialogTitle>
           {!isEditMode && (
             <DialogDescription>
-              Define your objective and its tasks. Use AI to help generate ideas.
+              Define tu objetivo y sus tareas. Usa la IA para generar ideas.
             </DialogDescription>
           )}
         </DialogHeader>
@@ -309,35 +310,35 @@ export const ObjectiveDialog = ({
           <form onSubmit={handleSubmit} className="space-y-6 py-4" id="objective-dialog-form">
             {!isEditMode && (
               <div>
-                <Label htmlFor="ai-prompt" className="font-semibold">AI Objective Prompt (Optional)</Label>
+                <Label htmlFor="ai-prompt" className="font-semibold">Solicitud para IA (Opcional)</Label>
                 <Textarea
                   id="ai-prompt"
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="e.g., Increase Q3 sales by 15% through targeted digital marketing"
+                  placeholder="ej., Aumentar ventas Q3 en 15% con marketing digital dirigido"
                   className="mt-1"
                 />
                 <Button type="button" onClick={handleGetAiSuggestions} disabled={isAiLoading || isLoadingMembers} size="sm" className="mt-2">
                   {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  Get AI Suggestions
+                  Obtener Sugerencias de IA
                 </Button>
               </div>
             )}
 
             <div>
-              <Label htmlFor="objective-description" className="font-semibold">Objective Description</Label>
+              <Label htmlFor="objective-description" className="font-semibold">Descripción del Objetivo</Label>
               <Input
                 id="objective-description"
                 value={objectiveDescription}
                 onChange={(e) => setObjectiveDescription(e.target.value)}
-                placeholder="Objective title or description"
+                placeholder="Título o descripción del objetivo"
                 required
                 className="mt-1"
               />
             </div>
 
             <div>
-              <Label className="font-semibold">Tasks</Label>
+              <Label className="font-semibold">Tareas</Label>
               <div className="mt-1 max-h-[300px] overflow-y-auto pr-2 py-1 space-y-3 border rounded-md bg-muted/10">
                 {tasks.map((task) => (
                   (!task.isDeleted || (task.isDeleted && !task.isNew)) && ( 
@@ -349,18 +350,18 @@ export const ObjectiveDialog = ({
                       <Textarea
                         value={task.description}
                         onChange={(e) => handleTaskChange(task.tempId, "description", e.target.value)}
-                        placeholder={`Task description`}
+                        placeholder={`Descripción de la tarea`}
                         className={`flex-grow`}
                         rows={2}
                         disabled={task.isDeleted && !task.isNew}
                       />
-                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(task.tempId)} title={task.isDeleted && !task.isNew ? "Undo Remove" : "Remove Task"}>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveTask(task.tempId)} title={task.isDeleted && !task.isNew ? "Deshacer Eliminación" : "Eliminar Tarea"}>
                         {task.isDeleted && !task.isNew ? <PlusCircle className="h-4 w-4 text-green-600" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                       </Button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
                         <div>
-                            <Label htmlFor={`task-start-date-${task.tempId}`} className="text-xs">Start Date</Label>
+                            <Label htmlFor={`task-start-date-${task.tempId}`} className="text-xs">Fecha de Inicio</Label>
                             <Popover>
                               <PopoverTrigger asChild>
                                 <Button
@@ -370,7 +371,7 @@ export const ObjectiveDialog = ({
                                   disabled={(task.isDeleted && !task.isNew)}
                                 >
                                   <CalendarIcon className="mr-1 h-3 w-3" />
-                                  {task.startDate && isValid(task.startDate) ? format(task.startDate, "PPP") : <span>Pick start</span>}
+                                  {task.startDate && isValid(task.startDate) ? format(task.startDate, "PPP", { locale: es }) : <span>Elegir inicio</span>}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-auto p-0">
@@ -380,12 +381,13 @@ export const ObjectiveDialog = ({
                                   onSelect={(date) => handleTaskChange(task.tempId, "startDate", date || undefined)}
                                   initialFocus
                                   disabled={(task.isDeleted && !task.isNew)}
+                                  locale={es}
                                 />
                               </PopoverContent>
                             </Popover>
                         </div>
                         <div>
-                            <Label htmlFor={`task-due-date-${task.tempId}`} className="text-xs">Due Date</Label>
+                            <Label htmlFor={`task-due-date-${task.tempId}`} className="text-xs">Fecha de Entrega</Label>
                              <Popover>
                               <PopoverTrigger asChild>
                                 <Button
@@ -395,7 +397,7 @@ export const ObjectiveDialog = ({
                                   disabled={(task.isDeleted && !task.isNew)}
                                 >
                                   <CalendarIcon className="mr-1 h-3 w-3" />
-                                  {task.dueDate && isValid(task.dueDate) ? format(task.dueDate, "PPP") : <span>Pick due</span>}
+                                  {task.dueDate && isValid(task.dueDate) ? format(task.dueDate, "PPP", { locale: es }) : <span>Elegir entrega</span>}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-auto p-0">
@@ -405,6 +407,7 @@ export const ObjectiveDialog = ({
                                   onSelect={(date) => handleTaskChange(task.tempId, "dueDate", date || undefined)}
                                   initialFocus
                                   disabled={(date) => (task.isDeleted && !task.isNew) || (task.startDate && isValid(task.startDate) && date < task.startDate) || false }
+                                  locale={es}
                                 />
                               </PopoverContent>
                             </Popover>
@@ -416,10 +419,10 @@ export const ObjectiveDialog = ({
                         disabled={isLoadingMembers || (task.isDeleted && !task.isNew)}
                       >
                       <SelectTrigger className="mt-1 h-9 text-xs">
-                         <SelectValue placeholder={isLoadingMembers ? "Loading..." : "Assign to"} />
+                         <SelectValue placeholder={isLoadingMembers ? "Cargando..." : "Asignar a"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        <SelectItem value="unassigned">Sin asignar</SelectItem>
                         {workspaceMembers.map(member => (
                           <SelectItem key={member.id} value={member.id}>{member.email}</SelectItem>
                         ))}
@@ -429,27 +432,25 @@ export const ObjectiveDialog = ({
                   )
                 ))}
                  {tasks.filter(t => !t.isDeleted || (t.isDeleted && !t.isNew)).length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-3">No tasks added yet. Click "Add Task" below.</p>
+                  <p className="text-sm text-muted-foreground text-center py-3">Aún no hay tareas añadidas. Haz clic en "Añadir Tarea" abajo.</p>
                 )}
               </div>
               <Button type="button" variant="outline" size="sm" onClick={handleAddTask} className="mt-3">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add Task
+                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Tarea
               </Button>
             </div>
           </form>
         </ScrollArea>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            Cancelar
           </Button>
           <Button type="submit" form="objective-dialog-form" disabled={isSubmitting || isLoadingMembers}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {isEditMode ? "Save Changes" : "Save Objective"}
+            {isEditMode ? "Guardar Cambios" : "Guardar Objetivo"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
-
-    

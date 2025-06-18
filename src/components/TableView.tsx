@@ -1,12 +1,34 @@
 
 "use client";
 
-import type { Objective, Task } from "@/types";
+import type { Objective, Task, TaskPriority, TaskStatus } from "@/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { format, parseISO } from "date-fns";
+import { es } from 'date-fns/locale';
+
+
+const translateStatusToSpanish = (status: TaskStatus): string => {
+  switch (status) {
+    case "To Do": return "Por Hacer";
+    case "In Progress": return "En Progreso";
+    case "Blocked": return "Bloqueado";
+    case "Done": return "Hecho";
+    default: return status;
+  }
+};
+
+const translatePriorityToSpanish = (priority: TaskPriority): string => {
+  switch (priority) {
+    case "Low": return "Baja";
+    case "Medium": return "Media";
+    case "High": return "Alta";
+    default: return priority;
+  }
+};
+
 
 const calculateObjectiveProgress = (tasks: Task[]): number => {
   if (!tasks || tasks.length === 0) return 0;
@@ -22,7 +44,7 @@ export const TableView = ({ objectives }: TableViewProps) => {
   if (!objectives || objectives.length === 0) {
     return (
       <Card className="p-6 text-center text-muted-foreground shadow-md">
-        No objectives to display. Click "Add Objective" to get started.
+        No hay objetivos para mostrar. Haz clic en "Añadir Objetivo" para empezar.
       </Card>
     );
   }
@@ -38,7 +60,7 @@ export const TableView = ({ objectives }: TableViewProps) => {
                   {objective.description}
                 </span>
                 <div className="flex items-center gap-2 w-full md:w-auto md:min-w-[200px] md:max-w-xs">
-                  <Progress value={calculateObjectiveProgress(objective.tasks)} className="h-3 flex-grow" aria-label={`Progress for ${objective.description}`} />
+                  <Progress value={calculateObjectiveProgress(objective.tasks)} className="h-3 flex-grow" aria-label={`Progreso para ${objective.description}`} />
                   <span className="text-sm text-muted-foreground whitespace-nowrap">
                     {calculateObjectiveProgress(objective.tasks).toFixed(0)}%
                   </span>
@@ -48,7 +70,7 @@ export const TableView = ({ objectives }: TableViewProps) => {
             <AccordionContent className="p-4 pt-0 border-t bg-card rounded-b-lg">
               {objective.tasks.length > 0 ? (
                 <div className="mt-4 space-y-3">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Tasks:</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Tareas:</h4>
                   <ul className="space-y-3">
                     {objective.tasks.map(task => (
                       <li key={task.id} className="p-3 border rounded-md bg-muted/30 hover:bg-muted/60 transition-colors">
@@ -58,19 +80,19 @@ export const TableView = ({ objectives }: TableViewProps) => {
                             variant={task.status === "Done" ? "default" : (task.status === "Blocked" ? "destructive" : "secondary")}
                             className="whitespace-nowrap capitalize self-start sm:self-center"
                           >
-                            {task.status}
+                            {translateStatusToSpanish(task.status)}
                           </Badge>
                         </div>
                         <div className="text-xs text-muted-foreground mt-2 space-y-1 sm:space-y-0 sm:flex sm:gap-4">
                           {task.priority && (
-                            <span className="block sm:inline"><strong>Priority:</strong> {task.priority}</span>
+                            <span className="block sm:inline"><strong>Prioridad:</strong> {translatePriorityToSpanish(task.priority)}</span>
                           )}
                           {task.assignee && task.assignee.email && (
-                            <span className="block sm:inline"><strong>Assignee:</strong> {task.assignee.email}</span>
+                            <span className="block sm:inline"><strong>Asignado a:</strong> {task.assignee.email}</span>
                           )}
                           {task.dueDate && (
                             <span className="block sm:inline">
-                              <strong>Due:</strong> {format(task.dueDate instanceof Date ? task.dueDate : parseISO(task.dueDate as unknown as string), "MMM d, yyyy")}
+                              <strong>Vence:</strong> {format(task.dueDate instanceof Date ? task.dueDate : parseISO(task.dueDate as unknown as string), "MMM d, yyyy", { locale: es })}
                             </span>
                           )}
                         </div>
@@ -79,7 +101,7 @@ export const TableView = ({ objectives }: TableViewProps) => {
                   </ul>
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-muted-foreground">No tasks for this objective.</p>
+                <p className="mt-4 text-sm text-muted-foreground">No hay tareas para este objetivo.</p>
               )}
             </AccordionContent>
           </Card>

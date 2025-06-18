@@ -24,7 +24,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      toast({ title: "Error", description: "Please fill in all fields.", variant: "destructive" });
+      toast({ title: "Error", description: "Por favor, completa todos los campos.", variant: "destructive" });
       return;
     }
     
@@ -33,9 +33,9 @@ export default function LoginPage() {
     setIsSubmitting(false);
 
     if ("error" in result) {
-      toast({ title: "Login Failed", description: result.error, variant: "destructive" });
+      toast({ title: "Inicio de Sesión Fallido", description: result.error, variant: "destructive" });
     } else {
-      toast({ title: "Logged In", description: `Welcome back, ${result.email}!` });
+      toast({ title: "Sesión Iniciada", description: `¡Bienvenido de nuevo, ${result.email}!` });
       router.push("/");
     }
   };
@@ -48,17 +48,17 @@ export default function LoginPage() {
       </div>
       <Card className="w-full max-w-sm shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl font-headline">Login</CardTitle>
-          <CardDescription>Enter your credentials to access your TaskTracker.</CardDescription>
+          <CardTitle className="text-2xl font-headline">Iniciar Sesión</CardTitle>
+          <CardDescription>Ingresa tus credenciales para acceder a tu TaskTracker.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Correo Electrónico</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="m@example.com"
+                placeholder="tu@ejemplo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -66,7 +66,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
@@ -77,15 +77,15 @@ export default function LoginPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
-              {isSubmitting || authLoading ? <Loader2 className="animate-spin" /> : "Login"}
+              {isSubmitting || authLoading ? <Loader2 className="animate-spin" /> : "Iniciar Sesión"}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="text-sm">
           <p>
-            Don&apos;t have an account?{" "}
+            ¿No tienes una cuenta?{" "}
             <Link href="/signup" className="font-medium text-primary underline hover:no-underline">
-              Sign up
+              Regístrate
             </Link>
           </p>
         </CardFooter>

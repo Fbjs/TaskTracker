@@ -22,7 +22,7 @@ import type { Workspace } from "@/types";
 interface WorkspaceDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onWorkspaceCreated: (newWorkspace: Workspace) => void; // Callback after successful creation
+  onWorkspaceCreated: (newWorkspace: Workspace) => void;
 }
 
 export const WorkspaceDialog = ({ isOpen, onOpenChange, onWorkspaceCreated }: WorkspaceDialogProps) => {
@@ -41,11 +41,11 @@ export const WorkspaceDialog = ({ isOpen, onOpenChange, onWorkspaceCreated }: Wo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
-      toast({ title: "Error", description: "You must be logged in to create a workspace.", variant: "destructive" });
+      toast({ title: "Error", description: "Debes iniciar sesión para crear un espacio de trabajo.", variant: "destructive" });
       return;
     }
     if (!workspaceName.trim()) {
-      toast({ title: "Validation Error", description: "Workspace name cannot be empty.", variant: "destructive" });
+      toast({ title: "Error de Validación", description: "El nombre del espacio de trabajo no puede estar vacío.", variant: "destructive" });
       return;
     }
 
@@ -53,14 +53,14 @@ export const WorkspaceDialog = ({ isOpen, onOpenChange, onWorkspaceCreated }: Wo
     try {
       const result = await createWorkspaceAction(workspaceName, user.id);
       if ("error" in result) {
-        toast({ title: "Error Creating Workspace", description: result.error, variant: "destructive" });
+        toast({ title: "Error al Crear Espacio de Trabajo", description: result.error, variant: "destructive" });
       } else {
-        toast({ title: "Workspace Created", description: `Workspace "${result.name}" has been successfully created.` });
-        onWorkspaceCreated(result); // Call the callback
+        toast({ title: "Espacio de Trabajo Creado", description: `El espacio de trabajo "${result.name}" se ha creado correctamente.` });
+        onWorkspaceCreated(result);
         onOpenChange(false);
       }
     } catch (error) {
-      toast({ title: "Error", description: "Failed to create workspace.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudo crear el espacio de trabajo.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -70,19 +70,19 @@ export const WorkspaceDialog = ({ isOpen, onOpenChange, onWorkspaceCreated }: Wo
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-headline">Create New Workspace</DialogTitle>
+          <DialogTitle className="font-headline">Crear Nuevo Espacio de Trabajo</DialogTitle>
           <DialogDescription>
-            Give your new workspace a name.
+            Dale un nombre a tu nuevo espacio de trabajo.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4" id="workspace-dialog-form">
           <div>
-            <Label htmlFor="workspace-name">Workspace Name</Label>
+            <Label htmlFor="workspace-name">Nombre del Espacio de Trabajo</Label>
             <Input
               id="workspace-name"
               value={workspaceName}
               onChange={(e) => setWorkspaceName(e.target.value)}
-              placeholder="e.g., Q3 Marketing Team"
+              placeholder="ej., Equipo de Marketing Q3"
               required
               className="mt-1"
             />
@@ -90,11 +90,11 @@ export const WorkspaceDialog = ({ isOpen, onOpenChange, onWorkspaceCreated }: Wo
         </form>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            Cancelar
           </Button>
           <Button type="submit" form="workspace-dialog-form" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Create Workspace
+            Crear Espacio de Trabajo
           </Button>
         </DialogFooter>
       </DialogContent>

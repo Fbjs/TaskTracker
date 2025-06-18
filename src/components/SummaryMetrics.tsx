@@ -1,3 +1,4 @@
+
 import type { Objective, Task } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -41,12 +42,12 @@ export const SummaryMetrics = ({ objectives }: SummaryMetricsProps) => {
   const tasksByStatus = countTasksByStatus(objectives);
 
   const metrics = [
-    { title: "Total Objectives", value: totalObjectives, icon: <GanttChartSquare className="h-5 w-5 text-muted-foreground" /> },
-    { title: "Total Tasks", value: totalTasks, icon: <ListTodo className="h-5 w-5 text-muted-foreground" /> },
-    { title: "Tasks To Do", value: tasksByStatus["To Do"], icon: <ListTodo className="h-5 w-5 text-muted-foreground" /> },
-    { title: "Tasks In Progress", value: tasksByStatus["In Progress"], icon: <CheckCircle2 className="h-5 w-5 text-muted-foreground" /> },
-    { title: "Tasks Blocked", value: tasksByStatus["Blocked"], icon: <AlertOctagon className="h-5 w-5 text-muted-foreground" /> },
-    { title: "Tasks Done", value: tasksByStatus["Done"], icon: <CheckCircle2 className="h-5 w-5 text-muted-foreground" /> },
+    { title: "Objetivos Totales", value: totalObjectives, icon: <GanttChartSquare className="h-5 w-5 text-muted-foreground" /> },
+    { title: "Tareas Totales", value: totalTasks, icon: <ListTodo className="h-5 w-5 text-muted-foreground" /> },
+    { title: "Tareas Por Hacer", value: tasksByStatus["To Do"], icon: <ListTodo className="h-5 w-5 text-muted-foreground" /> },
+    { title: "Tareas En Progreso", value: tasksByStatus["In Progress"], icon: <CheckCircle2 className="h-5 w-5 text-muted-foreground" /> },
+    { title: "Tareas Bloqueadas", value: tasksByStatus["Blocked"], icon: <AlertOctagon className="h-5 w-5 text-muted-foreground" /> },
+    { title: "Tareas Hechas", value: tasksByStatus["Done"], icon: <CheckCircle2 className="h-5 w-5 text-muted-foreground" /> },
   ];
 
   return (
@@ -66,11 +67,11 @@ export const SummaryMetrics = ({ objectives }: SummaryMetricsProps) => {
       </div>
       <Card className="mt-4 shadow-md hover:shadow-lg transition-shadow duration-300">
         <CardHeader>
-          <CardTitle className="text-sm font-medium font-body">Overall Progress</CardTitle>
+          <CardTitle className="text-sm font-medium font-body">Progreso General</CardTitle>
         </CardHeader>
         <CardContent>
           <Progress value={overallProgress} className="w-full h-3" />
-          <p className="text-xs text-muted-foreground mt-1">{overallProgress.toFixed(0)}% complete</p>
+          <p className="text-xs text-muted-foreground mt-1">{overallProgress.toFixed(0)}% completado</p>
         </CardContent>
       </Card>
     </div>

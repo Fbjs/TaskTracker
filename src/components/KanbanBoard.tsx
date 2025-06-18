@@ -1,3 +1,4 @@
+
 import type { Objective, Task, TaskStatus, ALL_TASK_STATUSES } from "@/types";
 import { KanbanColumn } from "./KanbanColumn";
 import { Progress } from "@/components/ui/progress";
@@ -31,7 +32,7 @@ export const KanbanBoard = ({ objective, onTaskStatusChange, onTaskDragStart, dr
       <div className="mb-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold font-headline mb-1">{objective.description}</h2>
-          <Button variant="ghost" size="icon" onClick={() => onEditObjective(objective)} aria-label="Edit objective">
+          <Button variant="ghost" size="icon" onClick={() => onEditObjective(objective)} aria-label="Editar objetivo">
             <Pencil className="h-4 w-4" />
           </Button>
         </div>

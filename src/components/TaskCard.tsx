@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, User, GripVertical, AlertTriangle, CheckCircle, CircleDot, Circle, Pencil } from "lucide-react";
 import { format } from "date-fns";
+import { es } from 'date-fns/locale';
 
 interface TaskCardProps {
   task: Task;
@@ -17,6 +18,25 @@ const priorityColors: Record<TaskPriority, string> = {
   Low: "bg-green-500 hover:bg-green-600",
   Medium: "bg-yellow-500 hover:bg-yellow-600",
   High: "bg-red-500 hover:bg-red-600",
+};
+
+const translateStatusToSpanish = (status: TaskStatus): string => {
+  switch (status) {
+    case "To Do": return "Por Hacer";
+    case "In Progress": return "En Progreso";
+    case "Blocked": return "Bloqueado";
+    case "Done": return "Hecho";
+    default: return status;
+  }
+};
+
+const translatePriorityToSpanish = (priority: TaskPriority): string => {
+  switch (priority) {
+    case "Low": return "Baja";
+    case "Medium": return "Media";
+    case "High": return "Alta";
+    default: return priority;
+  }
 };
 
 const statusIcons: Record<TaskStatus, React.ReactNode> = {
@@ -38,7 +58,7 @@ export const TaskCard = ({ task, isDragging, onDragStart, onEditTask }: TaskCard
           <CardTitle className="text-base font-medium font-body leading-tight break-words w-[calc(100%-3rem)]">{task.description}</CardTitle>
           <div className="flex flex-col items-end gap-1">
             <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 cursor-grab" />
-            <Button variant="ghost" size="icon" className="h-6 w-6 mt-1" onClick={() => onEditTask(task)} aria-label="Edit task">
+            <Button variant="ghost" size="icon" className="h-6 w-6 mt-1" onClick={() => onEditTask(task)} aria-label="Editar tarea">
               <Pencil className="h-3 w-3" />
             </Button>
           </div>
@@ -48,17 +68,17 @@ export const TaskCard = ({ task, isDragging, onDragStart, onEditTask }: TaskCard
         <div className="flex items-center justify-between mb-2">
           <Badge variant="secondary" className="flex items-center gap-1">
             {statusIcons[task.status]}
-            {task.status}
+            {translateStatusToSpanish(task.status)}
           </Badge>
-          <Badge className={`${priorityColors[task.priority]} text-white`}>{task.priority}</Badge>
+          <Badge className={`${priorityColors[task.priority]} text-white`}>{translatePriorityToSpanish(task.priority)}</Badge>
         </div>
         {task.dueDate && (
           <div className="flex items-center text-muted-foreground mb-1">
             <CalendarDays className="mr-2 h-4 w-4" />
-            <span>{format(new Date(task.dueDate), "MMM d, yyyy")}</span>
+            <span>{format(new Date(task.dueDate), "MMM d, yyyy", { locale: es })}</span>
           </div>
         )}
-        {task.assignee && task.assignee.email && ( // Changed to task.assignee.email
+        {task.assignee && task.assignee.email && (
           <div className="flex items-center text-muted-foreground">
             <User className="mr-2 h-4 w-4" />
             <span>{task.assignee.email}</span>

@@ -1,3 +1,4 @@
+
 import type { Task, TaskStatus } from "@/types";
 import { TaskCard } from "./TaskCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,16 @@ interface KanbanColumnProps {
   draggingTaskId: string | null;
   onEditTask: (task: Task) => void;
 }
+
+const translateStatusToSpanish = (status: TaskStatus): string => {
+  switch (status) {
+    case "To Do": return "Por Hacer";
+    case "In Progress": return "En Progreso";
+    case "Blocked": return "Bloqueado";
+    case "Done": return "Hecho";
+    default: return status;
+  }
+};
 
 export const KanbanColumn = ({ status, tasks, onTaskDrop, onTaskDragStart, draggingTaskId, onEditTask }: KanbanColumnProps) => {
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -32,11 +43,11 @@ export const KanbanColumn = ({ status, tasks, onTaskDrop, onTaskDragStart, dragg
       onDrop={handleDrop}
     >
       <CardHeader className="p-3 border-b">
-        <CardTitle className="text-md font-semibold font-headline capitalize">{status}</CardTitle>
+        <CardTitle className="text-md font-semibold font-headline capitalize">{translateStatusToSpanish(status)}</CardTitle>
       </CardHeader>
       <CardContent className="p-3 flex-grow overflow-y-auto">
         {tasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No tasks yet.</p>
+          <p className="text-sm text-muted-foreground text-center py-4">Aún no hay tareas.</p>
         ) : (
           tasks.map((task) => (
             <TaskCard 

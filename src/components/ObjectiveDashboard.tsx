@@ -1,3 +1,4 @@
+
 import type { Objective, Task, TaskStatus } from "@/types";
 import { KanbanBoard } from "./KanbanBoard";
 
@@ -12,7 +13,7 @@ interface ObjectiveDashboardProps {
 
 export const ObjectiveDashboard = ({ objectives, onTaskStatusChange, onTaskDragStart, draggingTaskId, onEditObjective, onEditTask }: ObjectiveDashboardProps) => {
   if (objectives.length === 0) {
-    return <p className="text-center text-muted-foreground py-10">No objectives created yet. Click "Add Objective" to get started.</p>;
+    return <p className="text-center text-muted-foreground py-10">Aún no hay objetivos creados. Haz clic en "Añadir Objetivo" para empezar.</p>;
   }
 
   return (

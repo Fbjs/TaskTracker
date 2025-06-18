@@ -8,8 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
 import { SummaryMetrics } from "@/components/SummaryMetrics";
 import { ObjectiveDashboard } from "@/components/ObjectiveDashboard";
-// import { GanttChartView } from "@/components/GanttChartView"; // Old Recharts Gantt
-import { CustomGanttChartView } from "@/components/CustomGanttChartView"; // New Custom Gantt
+import { CustomGanttChartView } from "@/components/CustomGanttChartView";
 import { TableView } from "@/components/TableView";
 import { ObjectiveDialog } from "@/components/ObjectiveDialog";
 import { TaskDialog } from "@/components/TaskDialog";
@@ -77,7 +76,7 @@ export default function Home() {
 
       setObjectives(data.objectives.map(processRawObjective));
     } catch (error) {
-      toast({ title: "Error", description: "Failed to load data.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudieron cargar los datos.", variant: "destructive" });
       console.error("Failed to load data", error);
     } finally {
       setIsLoadingData(false);
@@ -100,7 +99,7 @@ export default function Home() {
 
   const handleAddObjectiveClick = () => {
     if (!currentWorkspace) {
-      toast({ title: "No Workspace", description: "Please select or create a workspace first.", variant: "default"});
+      toast({ title: "Sin Espacio de Trabajo", description: "Por favor, selecciona o crea un espacio de trabajo primero.", variant: "default"});
       return;
     }
     setEditingObjective(null);
@@ -181,7 +180,7 @@ export default function Home() {
       const result = await updateTaskStatusAction(taskId, newStatus, objectiveId);
       if (!result.success || !result.task) {
         setObjectives(originalObjectives.map(processRawObjective)); 
-        toast({ title: "Update Failed", description: result.error || "Could not update task status.", variant: "destructive" });
+        toast({ title: "Actualización Fallida", description: result.error || "No se pudo actualizar el estado de la tarea.", variant: "destructive" });
       } else {
         
         setObjectives(prevObjectives =>
@@ -196,11 +195,11 @@ export default function Home() {
               : obj
           )
         );
-        toast({ title: "Task Updated", description: `Task moved to ${newStatus}.` });
+        toast({ title: "Tarea Actualizada", description: `Tarea movida a ${newStatus}.` });
       }
     } catch (error) {
       setObjectives(originalObjectives.map(processRawObjective)); 
-      toast({ title: "Error", description: "An error occurred while updating task status.", variant: "destructive" });
+      toast({ title: "Error", description: "Ocurrió un error al actualizar el estado de la tarea.", variant: "destructive" });
     }
   };
 
@@ -228,7 +227,7 @@ export default function Home() {
 
   const handleOpenManageMembers = () => {
     if (!currentWorkspace) {
-      toast({ title: "No Workspace Selected", description: "Please select a workspace to manage its members.", variant: "default"});
+      toast({ title: "Ningún Espacio de Trabajo Seleccionado", description: "Por favor, selecciona un espacio de trabajo para administrar sus miembros.", variant: "default"});
       return;
     }
     setIsManageMembersDialogOpen(true);
@@ -239,7 +238,6 @@ export default function Home() {
     if (currentWorkspace?.id === updatedWorkspace.id) {
       setCurrentWorkspace(updatedWorkspace);
     }
-     // Refresh objectives to potentially update assignee details if a member was removed and tasks unassigned
     loadData();
   };
 
@@ -285,14 +283,14 @@ export default function Home() {
       <main className="flex-grow container mx-auto px-4 py-8">
         {!currentWorkspace && workspaces.length > 0 && (
           <div className="text-center py-10 bg-card p-6 rounded-lg shadow-md">
-            <h2 className="text-2xl font-semibold mb-3">Welcome, {user?.email}!</h2>
-            <p className="text-muted-foreground mb-4">Please select a workspace to get started or create a new one.</p>
+            <h2 className="text-2xl font-semibold mb-3">¡Bienvenido, {user?.email}!</h2>
+            <p className="text-muted-foreground mb-4">Por favor, selecciona un espacio de trabajo para comenzar o crea uno nuevo.</p>
           </div>
         )}
         {!currentWorkspace && workspaces.length === 0 && user && (
            <div className="text-center py-10 bg-card p-6 rounded-lg shadow-md">
-            <h2 className="text-2xl font-semibold mb-3">Welcome, {user?.email}!</h2>
-            <p className="text-muted-foreground mb-4">Create your first workspace to begin organizing your objectives.</p>
+            <h2 className="text-2xl font-semibold mb-3">¡Bienvenido, {user?.email}!</h2>
+            <p className="text-muted-foreground mb-4">Crea tu primer espacio de trabajo para empezar a organizar tus objetivos.</p>
           </div>
         )}
 
@@ -302,13 +300,13 @@ export default function Home() {
             <Tabs defaultValue="dashboard" className="w-full">
               <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 md:w-auto md:max-w-lg mb-6">
                 <TabsTrigger value="dashboard" className="font-body">
-                  <LayoutGrid className="mr-2 h-4 w-4" /> Board View
+                  <LayoutGrid className="mr-2 h-4 w-4" /> Vista Tablero
                 </TabsTrigger>
                 <TabsTrigger value="gantt" className="font-body">
-                  <BarChartHorizontalBig className="mr-2 h-4 w-4" /> Gantt View
+                  <BarChartHorizontalBig className="mr-2 h-4 w-4" /> Vista Gantt
                 </TabsTrigger>
                 <TabsTrigger value="table" className="font-body">
-                  <ListTree className="mr-2 h-4 w-4" /> Table View
+                  <ListTree className="mr-2 h-4 w-4" /> Vista Tabla
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="dashboard">
@@ -363,4 +361,3 @@ export default function Home() {
     </div>
   );
 }
-
