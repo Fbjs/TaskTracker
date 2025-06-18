@@ -5,17 +5,19 @@ export const ALL_TASK_STATUSES: TaskStatus[] = ["To Do", "In Progress", "Blocked
 export type TaskPriority = "Low" | "Medium" | "High";
 export const ALL_TASK_PRIORITIES: TaskPriority[] = ["Low", "Medium", "High"];
 
+export type ObjectivePriority = "Low" | "Medium" | "High";
+export const ALL_OBJECTIVE_PRIORITIES: ObjectivePriority[] = ["Low", "Medium", "High"];
+
 export interface User {
   id: string;
   email: string;
-  // Add other user fields if needed, e.g., name
 }
 
 export interface Workspace {
   id: string;
   name: string;
   ownerId: string;
-  memberIds: string[]; // Changed: made non-optional
+  memberIds: string[];
 }
 
 export interface Task {
@@ -23,11 +25,11 @@ export interface Task {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
-  startDate?: Date; // Added startDate
+  startDate?: Date;
   dueDate?: Date;
   createdAt: Date;
-  assigneeId?: string; // ID of the assigned user
-  assignee?: Pick<User, 'id' | 'email'>; // Populated assignee details for display
+  assigneeId?: string;
+  assignee?: Pick<User, 'id' | 'email'>;
   objectiveId: string;
 }
 
@@ -35,13 +37,16 @@ export interface Objective {
   id: string;
   description: string;
   tasks: Task[];
-  userId?: string; // ID of the user who created it (likely owner of workspace)
-  workspaceId?: string; // ID of the workspace it belongs to
+  userId?: string;
+  workspaceId?: string;
+  priority: ObjectivePriority; // Nuevo campo
+  isArchived: boolean; // Se añade aquí para la siguiente etapa, pero se inicializará
+  createdAt: Date; // Asegurar que createdAt esté aquí para la ordenación
 }
 
 export interface SuggestedTask {
   taskDescription: string;
-  assignee: string; // This might need to become assigneeEmail or similar if AI suggests emails
+  assignee: string;
 }
 
 export interface AISuggestions {
@@ -49,7 +54,7 @@ export interface AISuggestions {
   tasks: SuggestedTask[];
 }
 
-export interface GanttTask extends Task { // GanttTask already uses `start` and `end` which is fine
+export interface GanttTask extends Task {
   name: string;
   start: Date;
   end: Date;

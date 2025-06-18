@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { Objective, Task, TaskStatus, AISuggestions, Workspace } from "@/types";
+import type { Objective, Task, TaskStatus, AISuggestions, Workspace, ObjectivePriority } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
 import { SummaryMetrics } from "@/components/SummaryMetrics";
@@ -15,9 +15,15 @@ import { TaskDialog } from "@/components/TaskDialog";
 import { ManageMembersDialog } from "@/components/ManageMembersDialog"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LayoutGrid, BarChartHorizontalBig, Loader2, ListTree, Users } from "lucide-react"; 
-import { getInitialData, updateTaskStatusAction, updateObjectiveAction, updateTaskAction, createWorkspaceAction } from "@/app/actions";
+import { getInitialData, updateTaskStatusAction, addObjectiveAction, updateObjectiveAction, updateTaskAction, createWorkspaceAction } from "@/app/actions"; // Added addObjectiveAction
 import { useToast } from "@/hooks/use-toast";
 
+
+const priorityOrder: Record<ObjectivePriority, number> = {
+  High: 1,
+  Medium: 2,
+  Low: 3,
+};
 
 export default function Home() {
   const { user, isLoading: authIsLoading, logout } = useAuth();
@@ -54,6 +60,9 @@ export default function Home() {
       ...rawObj,
       userId: rawObj.userId || user?.id, 
       workspaceId: rawObj.workspaceId || currentWorkspace?.id, 
+      priority: rawObj.priority || "Medium", // Default priority
+      isArchived: rawObj.isArchived || false, // Default isArchived
+      createdAt: rawObj.createdAt ? new Date(rawObj.createdAt) : new Date(),
       tasks: rawObj.tasks?.map(processSingleTask) || [],
     };
   }, [user?.id, currentWorkspace?.id, processSingleTask]);
@@ -111,15 +120,19 @@ export default function Home() {
     setIsObjectiveDialogOpen(true);
   };
   
-  const handleObjectiveSaved = (savedObjective: Objective | { error: string }) => {
-     if ("error" in savedObjective) {
-      toast({ title: "Error", description: savedObjective.error, variant: "destructive" });
+  const handleObjectiveSaved = (savedObjectiveResult: Objective | { error: string }) => {
+     if ("error" in savedObjectiveResult) {
+      toast({ title: "Error", description: savedObjectiveResult.error, variant: "destructive" });
       return;
     }
+    const savedObjective = savedObjectiveResult;
     const objectiveWithWorkspace = {
       ...savedObjective,
       workspaceId: savedObjective.workspaceId || currentWorkspace?.id,
       userId: savedObjective.userId || user?.id,
+      priority: savedObjective.priority || "Medium",
+      isArchived: savedObjective.isArchived || false,
+      createdAt: savedObjective.createdAt ? new Date(savedObjective.createdAt) : new Date(),
     };
     const processedSavedObjective = processRawObjective(objectiveWithWorkspace);
     if (editingObjective) {
@@ -242,7 +255,17 @@ export default function Home() {
   };
 
 
-  const filteredObjectives = objectives.filter(obj => obj.workspaceId === currentWorkspace?.id);
+  const filteredAndSortedObjectives = objectives
+    .filter(obj => obj.workspaceId === currentWorkspace?.id && !obj.isArchived)
+    .sort((a, b) => {
+      const priorityComparison = priorityOrder[a.priority] - priorityOrder[b.priority];
+      if (priorityComparison !== 0) {
+        return priorityComparison;
+      }
+      // Orden secundario por fecha de creación (más recientes primero)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
 
   if (authIsLoading || (!user && !authIsLoading)) {
     return (
@@ -296,7 +319,7 @@ export default function Home() {
 
         {currentWorkspace && (
           <>
-            <SummaryMetrics objectives={filteredObjectives} />
+            <SummaryMetrics objectives={filteredAndSortedObjectives} />
             <Tabs defaultValue="dashboard" className="w-full">
               <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 md:w-auto md:max-w-lg mb-6">
                 <TabsTrigger value="dashboard" className="font-body">
@@ -311,7 +334,7 @@ export default function Home() {
               </TabsList>
               <TabsContent value="dashboard">
                 <ObjectiveDashboard 
-                  objectives={filteredObjectives} 
+                  objectives={filteredAndSortedObjectives} 
                   onTaskStatusChange={handleTaskStatusChange}
                   onTaskDragStart={handleTaskDragStart}
                   draggingTaskId={draggingTaskId}
@@ -320,10 +343,10 @@ export default function Home() {
                 />
               </TabsContent>
               <TabsContent value="gantt">
-                <CustomGanttChartView objectives={filteredObjectives} />
+                <CustomGanttChartView objectives={filteredAndSortedObjectives} />
               </TabsContent>
               <TabsContent value="table">
-                <TableView objectives={filteredObjectives} />
+                <TableView objectives={filteredAndSortedObjectives} />
               </TabsContent>
             </Tabs>
           </>

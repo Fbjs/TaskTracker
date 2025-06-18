@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { Objective, User, Task as TaskType } from "@/types";
+import type { Objective, User, Task as TaskType, ObjectivePriority } from "@/types"; // Añadir ObjectivePriority
+import { ALL_OBJECTIVE_PRIORITIES } from "@/types"; // Añadir ALL_OBJECTIVE_PRIORITIES
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Sparkles, PlusCircle, Trash2, Loader2, CalendarIcon } from "lucide-react";
+import { Sparkles, PlusCircle, Trash2, Loader2, CalendarIcon, ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react"; // Añadir iconos de prioridad
 import { format, isValid } from "date-fns"; 
 import { es } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +46,18 @@ interface EditableTask {
   isDeleted?: boolean; 
 }
 
+const objectivePriorityTranslations: Record<ObjectivePriority, string> = {
+  "High": "Alta",
+  "Medium": "Media",
+  "Low": "Baja",
+};
+
+const ObjectivePriorityIcons: Record<ObjectivePriority, React.ElementType> = {
+  High: ShieldAlert,
+  Medium: ShieldCheck,
+  Low: ShieldQuestion,
+};
+
 export const ObjectiveDialog = ({
   isOpen,
   onOpenChange,
@@ -54,6 +67,7 @@ export const ObjectiveDialog = ({
   currentUserId,
 }: ObjectiveDialogProps) => {
   const [objectiveDescription, setObjectiveDescription] = useState("");
+  const [objectivePriority, setObjectivePriority] = useState<ObjectivePriority>("Medium"); // Nuevo estado
   const [aiPrompt, setAiPrompt] = useState("");
   const [tasks, setTasks] = useState<EditableTask[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -81,7 +95,7 @@ export const ObjectiveDialog = ({
 
   const parseAndValidateDate = (dateInput: Date | string | undefined): Date | undefined => {
     if (!dateInput) return undefined;
-    const date = new Date(dateInput);
+    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
     return isValid(date) ? date : undefined;
   };
 
@@ -89,6 +103,7 @@ export const ObjectiveDialog = ({
   const resetDialogState = useCallback(() => {
     if (isEditMode && objectiveToEdit) {
       setObjectiveDescription(objectiveToEdit.description);
+      setObjectivePriority(objectiveToEdit.priority || "Medium"); // Cargar prioridad
       setTasks(
         objectiveToEdit.tasks.map((task: TaskType) => ({
           tempId: generateTempId(),
@@ -104,6 +119,7 @@ export const ObjectiveDialog = ({
       setAiPrompt("");
     } else {
       setObjectiveDescription("");
+      setObjectivePriority("Medium"); // Default prioridad
       setTasks([{ tempId: generateTempId(), description: "", isNew: true, isDeleted: false, startDate: undefined, dueDate: undefined }]);
       setAiPrompt("");
     }
@@ -248,10 +264,15 @@ export const ObjectiveDialog = ({
                 dueDate: t.dueDate || null,
             };
           });
+        
+        const objectiveUpdates = {
+            description: objectiveDescription,
+            priority: objectivePriority,
+        };
 
         result = await updateObjectiveAction(
             objectiveToEdit.id, 
-            objectiveDescription,
+            objectiveUpdates,
             newTasksData,
             tasksToDeleteIds,
             tasksToUpdateData 
@@ -269,6 +290,7 @@ export const ObjectiveDialog = ({
 
         result = await addObjectiveAction(
           objectiveDescription,
+          objectivePriority, // Pasar prioridad
           tasksToSubmit,
           currentUserId,
           currentWorkspaceId
@@ -302,7 +324,7 @@ export const ObjectiveDialog = ({
           <DialogTitle className="font-headline">{isEditMode ? "Editar Objetivo" : "Añadir Nuevo Objetivo"}</DialogTitle>
           {!isEditMode && (
             <DialogDescription>
-              Define tu objetivo y sus tareas. Usa la IA para generar ideas.
+              Define tu objetivo y sus tareas. Usa la IA para generar ideas o establece una prioridad.
             </DialogDescription>
           )}
         </DialogHeader>
@@ -325,17 +347,41 @@ export const ObjectiveDialog = ({
               </div>
             )}
 
-            <div>
-              <Label htmlFor="objective-description" className="font-semibold">Descripción del Objetivo</Label>
-              <Input
-                id="objective-description"
-                value={objectiveDescription}
-                onChange={(e) => setObjectiveDescription(e.target.value)}
-                placeholder="Título o descripción del objetivo"
-                required
-                className="mt-1"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="objective-description" className="font-semibold">Descripción del Objetivo</Label>
+                    <Input
+                        id="objective-description"
+                        value={objectiveDescription}
+                        onChange={(e) => setObjectiveDescription(e.target.value)}
+                        placeholder="Título o descripción del objetivo"
+                        required
+                        className="mt-1"
+                    />
+                </div>
+                <div>
+                    <Label htmlFor="objective-priority" className="font-semibold">Prioridad del Objetivo</Label>
+                    <Select value={objectivePriority} onValueChange={(value: ObjectivePriority) => setObjectivePriority(value)}>
+                        <SelectTrigger id="objective-priority" className="mt-1">
+                        <SelectValue placeholder="Seleccionar prioridad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                        {ALL_OBJECTIVE_PRIORITIES.map(p => {
+                            const Icon = ObjectivePriorityIcons[p];
+                            return (
+                                <SelectItem key={p} value={p}>
+                                <div className="flex items-center gap-2">
+                                    <Icon className="h-4 w-4" />
+                                    {objectivePriorityTranslations[p]}
+                                </div>
+                                </SelectItem>
+                            );
+                        })}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
+
 
             <div>
               <Label className="font-semibold">Tareas</Label>
@@ -377,7 +423,7 @@ export const ObjectiveDialog = ({
                               <PopoverContent className="w-auto p-0">
                                 <Calendar
                                   mode="single"
-                                  selected={task.startDate}
+                                  selected={parseAndValidateDate(task.startDate)}
                                   onSelect={(date) => handleTaskChange(task.tempId, "startDate", date || undefined)}
                                   initialFocus
                                   disabled={(task.isDeleted && !task.isNew)}
@@ -403,7 +449,7 @@ export const ObjectiveDialog = ({
                               <PopoverContent className="w-auto p-0">
                                 <Calendar
                                   mode="single"
-                                  selected={task.dueDate}
+                                  selected={parseAndValidateDate(task.dueDate)}
                                   onSelect={(date) => handleTaskChange(task.tempId, "dueDate", date || undefined)}
                                   initialFocus
                                   disabled={(date) => (task.isDeleted && !task.isNew) || (task.startDate && isValid(task.startDate) && date < task.startDate) || false }
