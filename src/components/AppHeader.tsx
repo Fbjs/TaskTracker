@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, LogOut, Briefcase, ChevronDown, Settings, UserCircle, Users, Check } from "lucide-react";
+import { PlusCircle, LogOut, Briefcase, ChevronDown, Settings, UserCircle, Users, Check, Archive, ArchiveRestore } from "lucide-react";
 import { LogoIcon } from "@/components/icons/LogoIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -15,8 +15,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import type { Workspace } from "@/types";
+import type { ViewMode } from "@/app/page";
 import { WorkspaceDialog } from "./WorkspaceDialog"; 
 
 
@@ -27,6 +30,8 @@ interface AppHeaderProps {
   onWorkspaceSelected: (workspaceId: string) => void; 
   onWorkspaceCreated: (newWorkspace: Workspace) => void; 
   onManageMembers: () => void; 
+  currentViewMode: ViewMode;
+  onSetViewMode: (mode: ViewMode) => void;
 }
 
 export const AppHeader = ({ 
@@ -35,7 +40,9 @@ export const AppHeader = ({
   currentWorkspace, 
   onWorkspaceSelected,
   onWorkspaceCreated,
-  onManageMembers 
+  onManageMembers,
+  currentViewMode,
+  onSetViewMode
 }: AppHeaderProps) => {
   const { user, logout } = useAuth();
   const [isWorkspaceDialogOpen, setIsWorkspaceDialogOpen] = useState(false);
@@ -91,7 +98,7 @@ export const AppHeader = ({
                 </Button>
               )}
 
-              <Button onClick={onAddObjective} size="sm" disabled={!currentWorkspace}>
+              <Button onClick={onAddObjective} size="sm" disabled={!currentWorkspace || currentViewMode === 'archived'}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Añadir Objetivo
               </Button>
@@ -109,6 +116,21 @@ export const AppHeader = ({
                   <DropdownMenuItem disabled>
                     <span className="truncate text-sm text-muted-foreground">{user.email}</span>
                   </DropdownMenuItem>
+                  
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Vista de Objetivos</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={currentViewMode} onValueChange={(value) => onSetViewMode(value as ViewMode)}>
+                    <DropdownMenuRadioItem value="active">
+                      <ArchiveRestore className="mr-2 h-4 w-4" />
+                      Activos
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="archived">
+                      <Archive className="mr-2 h-4 w-4" />
+                      Archivados
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                  
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem disabled>
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Configuración</span>
@@ -144,3 +166,4 @@ export const AppHeader = ({
     </header>
   );
 };
+

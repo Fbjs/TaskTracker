@@ -1,10 +1,11 @@
 
 import type { Objective, Task, TaskStatus, ObjectivePriority } from "@/types";
+import type { ViewMode } from "@/app/page";
 import { KanbanColumn } from "./KanbanColumn";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, ShieldAlert, ShieldCheck, ShieldQuestion, Archive } from "lucide-react";
+import { Pencil, ShieldAlert, ShieldCheck, ShieldQuestion, Archive, ArchiveRestore } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +26,8 @@ interface KanbanBoardProps {
   onEditObjective: (objective: Objective) => void;
   onEditTask: (task: Task, objectiveId: string) => void;
   onArchiveObjective: (objectiveId: string) => void;
+  onUnarchiveObjective: (objectiveId: string) => void;
+  viewMode: ViewMode;
 }
 
 const statuses: TaskStatus[] = ["To Do", "In Progress", "Blocked", "Done"];
@@ -55,7 +58,9 @@ export const KanbanBoard = ({
   draggingTaskId, 
   onEditObjective, 
   onEditTask,
-  onArchiveObjective
+  onArchiveObjective,
+  onUnarchiveObjective,
+  viewMode
 }: KanbanBoardProps) => {
   const tasksByStatus = (status: TaskStatus) => {
     return objective.tasks.filter((task) => task.status === status);
@@ -72,6 +77,12 @@ export const KanbanBoard = ({
   const handleArchiveConfirm = () => {
     onArchiveObjective(objective.id);
   };
+
+  const handleUnarchiveConfirm = () => {
+    onUnarchiveObjective(objective.id);
+  };
+
+  const isArchivedView = viewMode === 'archived';
 
   return (
     <div className="p-4 mb-8 border rounded-lg shadow-lg bg-card">
@@ -90,10 +101,33 @@ export const KanbanBoard = ({
             )}
           </div>
           <div className="flex items-center">
-            <Button variant="ghost" size="icon" onClick={() => onEditObjective(objective)} aria-label="Editar objetivo">
+            <Button variant="ghost" size="icon" onClick={() => onEditObjective(objective)} aria-label="Editar objetivo" disabled={isArchivedView}>
               <Pencil className="h-4 w-4" />
             </Button>
-             {!objective.isArchived && (
+            
+            {isArchivedView ? (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="Desarchivar objetivo">
+                      <ArchiveRestore className="h-4 w-4 text-muted-foreground hover:text-green-600" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Restaurar este objetivo?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        El objetivo "{objective.description}" volverá a la lista de objetivos activos.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleUnarchiveConfirm} className="bg-green-600 hover:bg-green-700 text-white">
+                        Confirmar Restaurar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+            ) : (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="ghost" size="icon" aria-label="Archivar objetivo">
@@ -105,8 +139,7 @@ export const KanbanBoard = ({
                     <AlertDialogTitle>¿Estás seguro de que quieres archivar este objetivo?</AlertDialogTitle>
                     <AlertDialogDescription>
                       El objetivo "{objective.description}" se ocultará de la vista principal.
-                      Podrás verlo en una sección de archivados más adelante (funcionalidad futura). 
-                      Esta acción no se puede deshacer inmediatamente desde esta vista.
+                      Podrás verlo en la vista de "Archivados".
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -125,19 +158,24 @@ export const KanbanBoard = ({
           <span className="text-sm text-muted-foreground">{objectiveProgress().toFixed(0)}%</span>
         </div>
       </div>
-      <div className="flex gap-4 overflow-x-auto pb-4 min-h-[400px]">
-        {statuses.map((status) => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            tasks={tasksByStatus(status)}
-            onTaskDrop={(taskId, targetStatus, sourceStatus) => onTaskStatusChange(taskId, targetStatus, sourceStatus, objective.id)}
-            onTaskDragStart={onTaskDragStart}
-            draggingTaskId={draggingTaskId}
-            onEditTask={(task) => onEditTask(task, objective.id)}
-          />
-        ))}
-      </div>
+      {!isArchivedView && (
+        <div className="flex gap-4 overflow-x-auto pb-4 min-h-[400px]">
+          {statuses.map((status) => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              tasks={tasksByStatus(status)}
+              onTaskDrop={(taskId, targetStatus, sourceStatus) => onTaskStatusChange(taskId, targetStatus, sourceStatus, objective.id)}
+              onTaskDragStart={onTaskDragStart}
+              draggingTaskId={draggingTaskId}
+              onEditTask={(task) => onEditTask(task, objective.id)}
+            />
+          ))}
+        </div>
+      )}
+       {isArchivedView && (
+         <p className="text-sm text-muted-foreground">Las tareas no se muestran para objetivos archivados. Restaura el objetivo para ver y editar sus tareas.</p>
+       )}
     </div>
   );
 };

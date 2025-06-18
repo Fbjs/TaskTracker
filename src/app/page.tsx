@@ -15,7 +15,7 @@ import { TaskDialog } from "@/components/TaskDialog";
 import { ManageMembersDialog } from "@/components/ManageMembersDialog"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LayoutGrid, BarChartHorizontalBig, Loader2, ListTree, Users } from "lucide-react"; 
-import { getInitialData, updateTaskStatusAction, addObjectiveAction, updateObjectiveAction, updateTaskAction, createWorkspaceAction, archiveObjectiveAction } from "@/app/actions";
+import { getInitialData, updateTaskStatusAction, addObjectiveAction, updateObjectiveAction, updateTaskAction, createWorkspaceAction, archiveObjectiveAction, unarchiveObjectiveAction } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -24,6 +24,8 @@ const priorityOrder: Record<ObjectivePriority, number> = {
   Medium: 2,
   Low: 3,
 };
+
+export type ViewMode = 'active' | 'archived';
 
 export default function Home() {
   const { user, isLoading: authIsLoading, logout } = useAuth();
@@ -45,6 +47,8 @@ export default function Home() {
   const [isManageMembersDialogOpen, setIsManageMembersDialogOpen] = useState(false); 
 
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('active');
+
 
   const processSingleTask = useCallback((task: Task): Task => {
     return {
@@ -135,36 +139,45 @@ export default function Home() {
       createdAt: savedObjective.createdAt ? new Date(savedObjective.createdAt) : new Date(),
     };
     const processedSavedObjective = processRawObjective(objectiveWithWorkspace);
-    if (editingObjective) {
-      setObjectives(prev => prev.map(obj => obj.id === processedSavedObjective.id ? processedSavedObjective : obj));
-    } else {
-      setObjectives(prev => [...prev, processedSavedObjective]);
-    }
+    
+    setObjectives(prev => {
+      const existingIndex = prev.findIndex(obj => obj.id === processedSavedObjective.id);
+      if (existingIndex !== -1) {
+        const updatedObjectives = [...prev];
+        updatedObjectives[existingIndex] = processedSavedObjective;
+        return updatedObjectives;
+      }
+      return [...prev, processedSavedObjective];
+    });
+
     setIsObjectiveDialogOpen(false);
     setEditingObjective(null);
   };
 
   const handleArchiveObjective = async (objectiveId: string) => {
-    const originalObjectives = JSON.parse(JSON.stringify(objectives));
-    
-    setObjectives(prev => prev.map(obj => 
-      obj.id === objectiveId ? { ...obj, isArchived: true } : obj
-    ));
-
     const result = await archiveObjectiveAction(objectiveId);
     if ("error" in result) {
       toast({ title: "Error al Archivar", description: result.error, variant: "destructive" });
-      setObjectives(originalObjectives.map(processRawObjective)); // Revert on error
     } else {
       toast({ title: "Objetivo Archivado", description: `El objetivo "${result.description}" ha sido archivado.` });
-      // No need to setObjectives again here if the filter is client-side and reactive
-      // as 'filteredAndSortedObjectives' will re-calculate.
-      // If 'loadData()' was called, it would re-fetch excluding archived, so that works too.
-      // For immediate UI update, we might need to explicitly filter out from local state
-      // or ensure the filter re-runs.
-      // The current `filteredAndSortedObjectives` should handle this as it filters `isArchived: false`.
+      setObjectives(prev => prev.map(obj => 
+        obj.id === objectiveId ? { ...processRawObjective(result), isArchived: true } : obj
+      ));
     }
   };
+  
+  const handleUnarchiveObjective = async (objectiveId: string) => {
+    const result = await unarchiveObjectiveAction(objectiveId);
+    if ("error" in result) {
+      toast({ title: "Error al Desarchivar", description: result.error, variant: "destructive" });
+    } else {
+      toast({ title: "Objetivo Desarchivado", description: `El objetivo "${result.description}" ha sido restaurado.` });
+      setObjectives(prev => prev.map(obj => 
+        obj.id === objectiveId ? { ...processRawObjective(result), isArchived: false } : obj
+      ));
+    }
+  };
+
 
   const handleEditTaskClick = (task: Task, objectiveId: string) => {
     setEditingTask(task);
@@ -276,9 +289,13 @@ export default function Home() {
     loadData();
   };
 
+  const handleSetViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+  };
+
 
   const filteredAndSortedObjectives = objectives
-    .filter(obj => obj.workspaceId === currentWorkspace?.id && !obj.isArchived)
+    .filter(obj => obj.workspaceId === currentWorkspace?.id && obj.isArchived === (viewMode === 'archived'))
     .sort((a, b) => {
       const priorityComparison = priorityOrder[a.priority] - priorityOrder[b.priority];
       if (priorityComparison !== 0) {
@@ -305,7 +322,9 @@ export default function Home() {
           currentWorkspace={currentWorkspace || undefined}
           onWorkspaceSelected={handleWorkspaceSelected}
           onWorkspaceCreated={handleWorkspaceCreated}
-          onManageMembers={handleOpenManageMembers} 
+          onManageMembers={handleOpenManageMembers}
+          currentViewMode={viewMode}
+          onSetViewMode={handleSetViewMode}
         />
         <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-accent" />
@@ -322,7 +341,9 @@ export default function Home() {
         currentWorkspace={currentWorkspace || undefined}
         onWorkspaceSelected={handleWorkspaceSelected}
         onWorkspaceCreated={handleWorkspaceCreated}
-        onManageMembers={handleOpenManageMembers} 
+        onManageMembers={handleOpenManageMembers}
+        currentViewMode={viewMode}
+        onSetViewMode={handleSetViewMode}
       />
       <main className="flex-grow container mx-auto px-4 py-8">
         {!currentWorkspace && workspaces.length > 0 && (
@@ -362,6 +383,8 @@ export default function Home() {
                   onEditObjective={handleEditObjectiveClick}
                   onEditTask={handleEditTaskClick}
                   onArchiveObjective={handleArchiveObjective}
+                  onUnarchiveObjective={handleUnarchiveObjective}
+                  viewMode={viewMode}
                 />
               </TabsContent>
               <TabsContent value="gantt">

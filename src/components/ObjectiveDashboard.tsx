@@ -1,5 +1,6 @@
 
 import type { Objective, Task, TaskStatus } from "@/types";
+import type { ViewMode } from "@/app/page";
 import { KanbanBoard } from "./KanbanBoard";
 
 interface ObjectiveDashboardProps {
@@ -10,6 +11,8 @@ interface ObjectiveDashboardProps {
   onEditObjective: (objective: Objective) => void;
   onEditTask: (task: Task, objectiveId: string) => void;
   onArchiveObjective: (objectiveId: string) => void;
+  onUnarchiveObjective: (objectiveId: string) => void;
+  viewMode: ViewMode;
 }
 
 export const ObjectiveDashboard = ({ 
@@ -19,10 +22,12 @@ export const ObjectiveDashboard = ({
   draggingTaskId, 
   onEditObjective, 
   onEditTask,
-  onArchiveObjective 
+  onArchiveObjective,
+  onUnarchiveObjective,
+  viewMode 
 }: ObjectiveDashboardProps) => {
   if (objectives.length === 0) {
-    return <p className="text-center text-muted-foreground py-10">Aún no hay objetivos creados. Haz clic en "Añadir Objetivo" para empezar.</p>;
+    return <p className="text-center text-muted-foreground py-10">{viewMode === 'active' ? 'Aún no hay objetivos activos. Haz clic en "Añadir Objetivo" para empezar.' : 'No hay objetivos archivados.'}</p>;
   }
 
   return (
@@ -37,6 +42,8 @@ export const ObjectiveDashboard = ({
           onEditObjective={onEditObjective}
           onEditTask={onEditTask}
           onArchiveObjective={onArchiveObjective}
+          onUnarchiveObjective={onUnarchiveObjective}
+          viewMode={viewMode}
         />
       ))}
     </div>

@@ -164,7 +164,7 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
     const userWorkspacesDocs = await WorkspaceCollection.find({
       $or: [{ ownerId: userId }, { memberIds: userId }]
     }).lean();
-    userWorkspaces = userWorkspacesDocs.map(doc => serializeDocument<IWorkspace>(doc) as Workspace);
+    userWorkspaces = userWorkspacesDocs.map(ws => serializeDocument<IWorkspace>(ws) as Workspace);
 
 
     if (userWorkspaces.length === 0) {
@@ -188,7 +188,7 @@ export async function getInitialData(userId?: string): Promise<{ objectives: Obj
     try {
       const objectivesDocs = await ObjectiveCollection.find({ 
           workspaceId: { $in: workspaceIds },
-          isArchived: false 
+          // No filter on isArchived here, fetch all
         })
         .populate<{ tasks: ITask[] }>({
             path: 'tasks',
@@ -635,30 +635,55 @@ export async function archiveObjectiveAction(objectiveId: string): Promise<Objec
   }
 
   try {
-    const objective = await ObjectiveCollection.findById(objectiveId);
-    if (!objective) {
-      return { error: "Objetivo no encontrado." };
-    }
-
-    objective.isArchived = true;
-    await objective.save();
-
-    const populatedObjective = await ObjectiveCollection.findById(objective.id)
-        .populate<{ tasks: ITask[] }>({
-            path: 'tasks',
-            populate: { path: 'assigneeId', select: 'email _id' }
-        })
-        .exec();
+    const objective = await ObjectiveCollection.findByIdAndUpdate(
+      objectiveId,
+      { isArchived: true },
+      { new: true }
+    ).populate<{ tasks: ITask[] }>({
+        path: 'tasks',
+        populate: { path: 'assigneeId', select: 'email _id' }
+    }).exec();
     
-    if (!populatedObjective) return { error: "No se pudo volver a popular el objetivo después de archivarlo."};
+    if (!objective) {
+      return { error: "Objetivo no encontrado o fallo al archivar." };
+    }
     
     revalidatePath("/");
-    return serializeDocument<IObjective>(populatedObjective) as Objective;
+    return serializeDocument<IObjective>(objective) as Objective;
   } catch (error: any) {
     console.error("Error archiving objective:", error);
     return { error: "No se pudo archivar el objetivo. " + error.message };
   }
 }
+
+export async function unarchiveObjectiveAction(objectiveId: string): Promise<Objective | { error: string }> {
+  await dbConnect();
+  if (!objectiveId) {
+    return { error: "Se requiere el ID del objetivo para desarchivarlo." };
+  }
+
+  try {
+    const objective = await ObjectiveCollection.findByIdAndUpdate(
+      objectiveId,
+      { isArchived: false },
+      { new: true }
+    ).populate<{ tasks: ITask[] }>({
+        path: 'tasks',
+        populate: { path: 'assigneeId', select: 'email _id' }
+    }).exec();
+
+    if (!objective) {
+      return { error: "Objetivo no encontrado o fallo al desarchivar." };
+    }
+    
+    revalidatePath("/");
+    return serializeDocument<IObjective>(objective) as Objective;
+  } catch (error: any) {
+    console.error("Error unarchiving objective:", error);
+    return { error: "No se pudo desarchivar el objetivo. " + error.message };
+  }
+}
+
 
 export async function updateTaskStatusAction(taskId: string, newStatus: TaskStatus, objectiveId: string): Promise<{success: boolean, task?: Task} | {success: boolean, error?: string}> {
   await dbConnect();
@@ -801,3 +826,6 @@ export async function updateTaskAction(
   }
 }
 
+
+
+    
