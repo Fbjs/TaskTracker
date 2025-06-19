@@ -1,4 +1,3 @@
-import { ListChecks } from 'lucide-react';
-import type { LucideProps } from 'lucide-react';
+import type { HTMLAttributes } from 'react';
 
-export const LogoIcon = (props: LucideProps) => <ListChecks {...props} />;
+export const LogoIcon = (props: HTMLAttributes<HTMLImageElement>) => <img src='./assets/logo.png' alt='Logo' {...props} />;
