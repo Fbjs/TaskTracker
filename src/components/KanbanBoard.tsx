@@ -1,11 +1,13 @@
 
+"use client";
+
 import type { Objective, Task, TaskStatus, ObjectivePriority } from "@/types";
 import type { ViewMode } from "@/app/page";
 import { KanbanColumn } from "./KanbanColumn";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, ShieldAlert, ShieldCheck, ShieldQuestion, Archive, ArchiveRestore } from "lucide-react";
+import { Pencil, ShieldAlert, ShieldCheck, ShieldQuestion, Archive, ArchiveRestore, ChevronDown, ChevronUp } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +19,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useState } from "react";
 
 interface KanbanBoardProps {
   objective: Objective;
@@ -62,6 +65,8 @@ export const KanbanBoard = ({
   onUnarchiveObjective,
   viewMode
 }: KanbanBoardProps) => {
+  const [isMinimized, setIsMinimized] = useState(false);
+
   const tasksByStatus = (status: TaskStatus) => {
     return objective.tasks.filter((task) => task.status === status);
   };
@@ -87,20 +92,32 @@ export const KanbanBoard = ({
   return (
     <div className="p-4 mb-8 border rounded-lg shadow-lg bg-card">
       <div className="mb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold font-headline mb-1">{objective.description}</h2>
-            {objective.priority && (
-              <Badge 
-                className={`${objectivePriorityColors[objective.priority]} text-white text-xs`}
-                title={`Prioridad: ${objectivePriorityTranslations[objective.priority]}`}
-              >
-                <PriorityIcon className="h-3.5 w-3.5 mr-1" />
-                {objectivePriorityTranslations[objective.priority]}
-              </Badge>
-            )}
+        <div className="flex items-start justify-between">
+          <div className="flex-grow">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-semibold font-headline mb-1">{objective.description}</h2>
+              {objective.priority && (
+                <Badge 
+                  className={`${objectivePriorityColors[objective.priority]} text-white text-xs`}
+                  title={`Prioridad: ${objectivePriorityTranslations[objective.priority]}`}
+                >
+                  <PriorityIcon className="h-3.5 w-3.5 mr-1" />
+                  {objectivePriorityTranslations[objective.priority]}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <Progress value={objectiveProgress()} className="h-2.5 w-full max-w-md" />
+              <span className="text-sm text-muted-foreground">{objectiveProgress().toFixed(0)}%</span>
+            </div>
           </div>
-          <div className="flex items-center">
+
+          <div className="flex items-center flex-shrink-0 ml-2">
+            {!isArchivedView && (
+              <Button variant="ghost" size="icon" onClick={() => setIsMinimized(!isMinimized)} aria-label={isMinimized ? "Expandir objetivo" : "Minimizar objetivo"}>
+                {isMinimized ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={() => onEditObjective(objective)} aria-label="Editar objetivo" disabled={isArchivedView}>
               <Pencil className="h-4 w-4" />
             </Button>
@@ -153,12 +170,9 @@ export const KanbanBoard = ({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 mt-1">
-          <Progress value={objectiveProgress()} className="h-2.5 w-full max-w-md" />
-          <span className="text-sm text-muted-foreground">{objectiveProgress().toFixed(0)}%</span>
-        </div>
       </div>
-      {!isArchivedView && (
+
+      {!isArchivedView && !isMinimized && (
         <div className="flex gap-4 overflow-x-auto pb-4 min-h-[400px]">
           {statuses.map((status) => (
             <KanbanColumn
@@ -173,10 +187,13 @@ export const KanbanBoard = ({
           ))}
         </div>
       )}
+
        {isArchivedView && (
          <p className="text-sm text-muted-foreground">Las tareas no se muestran para objetivos archivados. Restaura el objetivo para ver y editar sus tareas.</p>
+       )}
+       {!isArchivedView && isMinimized && (
+         <p className="text-sm text-muted-foreground py-2">Objetivo minimizado. Haz clic en la flecha para expandir y ver tareas.</p>
        )}
     </div>
   );
 };
-
