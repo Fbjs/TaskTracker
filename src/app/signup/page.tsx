@@ -52,7 +52,7 @@ export default function SignupPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-muted/40">
        <div className="flex items-center gap-2 mb-8">
-        <LogoIcon className="h-8 w-8 text-accent" />
+        <LogoIcon className="h-12 w-12 text-accent" />
         <h1 className="text-3xl font-bold font-headline tracking-tight">TaskTracker</h1>
       </div>
       <Card className="w-full max-w-sm shadow-xl">
